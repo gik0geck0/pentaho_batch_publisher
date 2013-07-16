@@ -88,7 +88,7 @@ def get_directory_tree(server, username, password, path='/opt/pentaho/server/bis
                     print("%s is a directory" % tree_name)
                     # It's a directory
                     # When there's only one /, it's a directory in the root
-                    if tree_name.count('/') == 1 or tree_name.startswith(last_directory.data):
+                    if tree_name.count('/') == 1 or tree_name == last_directory.data + '/' + base_name:
                         print("Adding %s as an immediate sub-directory" % tree_name)
                         # This directory is a sub-directory
                         last_directory.children.append(child_node)
@@ -122,4 +122,4 @@ def tree_bfs(tree, tabs=-1):
 
 username = str(raw_input("SSH Login as Username: "))
 password = getpass.getpass()
-dir_tree = get_directory_tree('sapapentah001.recondo.vci', username + '@recondo.vci', password)
+dir_tree = get_directory_tree('localhost', username, password)
