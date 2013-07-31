@@ -140,7 +140,7 @@ def remove_file_from_zip(zipname, filename):
 
     old_in.close()
     new_out.close()
-    os.remove(filename + '.bak')
+    os.remove(zipname + '.bak')
 
 def change_run_type(prpt_file, new_type):
     # Read the layout.xml into an XML DOM
