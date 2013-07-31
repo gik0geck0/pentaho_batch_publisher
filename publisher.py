@@ -1,5 +1,6 @@
 #!/usr/bin/env python2
 
+import sys
 import paramiko
 import getpass
 
@@ -120,6 +121,70 @@ def tree_bfs(tree, tabs=-1):
     #        tree_bfs(node, tabs)
     #tabs -= 1
 
-username = str(raw_input("SSH Login as Username: "))
-password = getpass.getpass()
-dir_tree = get_directory_tree('localhost', username, password)
+def publish(prpt_file, server, username, password, directory):
+    pass
+
+import os
+import xml.dom.minidom as mdom
+from zipfile import *
+
+def remove_file_from_zip(zipname, filename):
+    os.rename(zipname, zipname + '.bak')
+    old_in = ZipFile(zipname + '.bak', 'r')
+    new_out = ZipFile(zipname, 'w')
+
+    for item in old_in.infolist():
+        buff = old_in.read(item)
+        if item.filename != filename:
+            new_out.writestr(item, buff)
+
+    old_in.close()
+    new_out.close()
+    os.remove(filename + '.bak')
+
+def change_run_type(prpt_file, new_type):
+    # Read the layout.xml into an XML DOM
+    readable_zip_file = ZipFile(prpt_file, 'r')
+    layout_dom = mdom.parseString(readable_zip_file.read('layout.xml'))
+    readable_zip_file.close()
+
+    # change the output-type to the new type
+    layout_elements = layout_dom.getElementsByTagName('layout')
+    if len(layout_elements) > 1:
+        print("There was more than 1 layout tag in this layout file. Wtf mate?")
+    print("Changing from type %s to the type %s" % (layout_elements[0].getAttribute('core:preferred-output-type'), new_type))
+    layout_elements[0].setAttribute('core:preferred-output-type', new_type)
+
+    # remove the old layout
+    remove_file_from_zip(prpt_file, 'layout.xml')
+
+    # write in the new layout
+    writable_zip_file = ZipFile(prpt_file, 'a')
+    writable_zip_file.writestr('layout.xml', layout_dom.toxml())
+
+def query_output(zipfile):
+    readable_zip_file = ZipFile(zipfile, 'r')
+    output = mdom.parseString(readable_zip_file.read('layout.xml')).getElementsByTagName('layout')[0].getAttribute('core:preferred-output-type')
+    readable_zip_file.close()
+    return output
+
+
+#username = str(raw_input("SSH Login as Username: "))
+#password = getpass.getpass()
+#dir_tree = get_directory_tree('localhost', username, password)
+
+if sys.argv[2] == 'csv':
+    new_type = 'table/csv;page-mode=stream'
+elif sys.argv[2] == 'pdf':
+    new_type = 'pageable/pdf'
+elif sys.argv[2] == 'xls':
+    new_type = 'table/excel;page-mode=stream'
+elif sys.argv[2] == 'query':
+    print(query_output(sys.argv[1]))
+    exit(0)
+else:
+    print("Unknown type")
+    exit(1)
+
+change_run_type(sys.argv[1], new_type)
+
