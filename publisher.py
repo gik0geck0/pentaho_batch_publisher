@@ -1,5 +1,6 @@
 #!/usr/bin/env python2
 
+import scp
 import sys
 import paramiko
 import getpass
@@ -121,8 +122,27 @@ def tree_bfs(tree, tabs=-1):
     #        tree_bfs(node, tabs)
     #tabs -= 1
 
+def set_permissions(server, username, password, directory='/opt/pentaho/server/biserver-ee/pentaho-solutions'):
+    ssh_conn = paramiko.SSHClient()
+    ssh_conn.load_system_host_keys()
+    ssh_conn.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    ssh_conn.connect(server, username=username, password=password)
+
+    ssh_conn.exec_command("pkill --signal SIGUSR1 -f permissions_receiver.py")
+    ssh_conn.close()
+
 def publish(prpt_file, server, username, password, directory):
-    pass
+    ssh_conn = paramiko.SSHClient()
+    ssh_conn.load_system_host_keys()
+    ssh_conn.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    ssh_conn.connect(server, username=username, password=password)
+
+    scp_conn = scp.SCPClient(ssh_conn.get_transport())
+    scp_conn.put(prpt_file, '/opt/pentaho/server/biserver-ee/pentaho-solutions/' + directory)
+
+    ssh_conn.close()
+
+    set_permissions(server, username, password)
 
 import os
 import xml.dom.minidom as mdom
@@ -142,7 +162,19 @@ def remove_file_from_zip(zipname, filename):
     new_out.close()
     os.remove(zipname + '.bak')
 
-def change_run_type(prpt_file, new_type):
+def change_run_type(prpt_file, new_type, custom_type=None):
+    if new_type == 'csv':
+        new_type = 'table/csv;page-mode=stream'
+    elif new_type == 'pdf':
+        new_type = 'pageable/pdf'
+    elif new_type == 'xls':
+        new_type = 'table/excel;page-mode=stream'
+    elif new_type == 'custom' and custom_type != None:
+        new_type = custom_type
+    else:
+        print("Unknown type")
+        exit(1)
+
     # Read the layout.xml into an XML DOM
     readable_zip_file = ZipFile(prpt_file, 'r')
     layout_dom = mdom.parseString(readable_zip_file.read('layout.xml'))
@@ -168,23 +200,31 @@ def query_output(zipfile):
     readable_zip_file.close()
     return output
 
+def sql_extractor(zipfile):
+    readable_zip_file = ZipFile(zipfile, 'r')
+    main_query_dom = mdom.parseString(readable_zip_file.read('datasources/sql-ds.xml'))
+    all_queries = main_query_dom.getElementsByTagName('data:query')
+    for element in all_queries:
+        print(element.getAttribute('name'))
+        for child in element.childNodes:
+            #print(child.childNodes[0].nodeValue)
+            out_sql = open(zipfile[:-5] + '-' + element.getAttribute('name') + '.sql', 'w')
+            print("Child nodes:")
+            print(child.childNodes)
+            print(child.childNodes.nodeValue.strip())
+            #out_sql.write(child.childNodes[0].nodeValue.strip())
+            out_sql.close()
+    readable_zip_file.close()
 
-#username = str(raw_input("SSH Login as Username: "))
-#password = getpass.getpass()
-#dir_tree = get_directory_tree('localhost', username, password)
 
-if sys.argv[2] == 'csv':
-    new_type = 'table/csv;page-mode=stream'
-elif sys.argv[2] == 'pdf':
-    new_type = 'pageable/pdf'
-elif sys.argv[2] == 'xls':
-    new_type = 'table/excel;page-mode=stream'
+if sys.argv[2] in ('csv', 'pdf', 'xls', 'custom'):
+    change_run_type(sys.argv[1], sys.argv[2], sys.argv[3])
 elif sys.argv[2] == 'query':
     print(query_output(sys.argv[1]))
-    exit(0)
-else:
-    print("Unknown type")
-    exit(1)
-
-change_run_type(sys.argv[1], new_type)
-
+elif sys.argv[2] == 'sql':
+    sql_extractor(sys.argv[1])
+elif sys.argv[2] == 'publish':
+    username = str(raw_input("SSH Login as Username: "))
+    password = getpass.getpass()
+    #dir_tree = get_directory_tree('localhost', username, password)
+    publish(sys.argv[1], sys.argv[3], username, password, sys.argv[4])
