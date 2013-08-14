@@ -3,9 +3,11 @@
 # Set of functions that can be used to interface with a pentaho server
 #
 require 'rubygems'
+require 'getpass'
 require 'httparty'
 require 'httmultiparty'
 require 'digest/md5'
+include Getpass
 
 =begin
   FILE_EXISTS = 1;
@@ -62,7 +64,7 @@ class PentahoConnection
   end
 
   def post(action, params, server=@server, auth=@auth)
-    query = params#.merge({ basic_auth: auth, base_uri: server })
+    query = params
     return HTTMultiParty.post(server+action, query: query, basic_auth: auth, base_uri: server)
   end
 
@@ -79,7 +81,37 @@ class PentahoConnection
 
 end
 
-pconn = PentahoConnection.new '', ''
+def handle(commands)
+  cmd = commands.shift
+  server = commands.shift
+  puts "Username for pentaho?"
+  username = 'prod.buland'
+  
+  password = getpass :prompt => 'Password: '
+  pconn = PentahoConnection.new username, password, server
+  
+  if cmd == 'ls'
+    puts pconn.get_repo_xml
+  elsif cmd == 'help'
+    puts "publish <COMMAND> <server> [OPTIONS]"
+    puts '','', "Possible commands:"
+    puts "    ls      Show the solution repository (XML)"
+    puts "    help    Show this usage doc"
+    puts "    file    publish a file"
+    puts '', "OPTIONS"
+    puts "    For file command:"
+    puts "      publish [server] file [path] [files...]"
+  else
+    pubpass = getpass prompt: "Publishing password?"
 
-puts pconn.publish_report([''], '', '')
-#puts pconn.get_repo_xml
+    path = commands.shift
+    files = commands
+    puts "Publishing to server: #{server}, path: #{path}, file-list: #{files}"
+    # and the file list is the remainder
+
+    puts pconn.publish_report(files, path, pubpass)
+  end
+end
+
+args = ARGV
+handle(args)
