@@ -81,7 +81,7 @@ class PentahoConnection
 
 end
 
-def handle(commands)
+def handle_publish(commands)
   cmd = commands.shift
   server = commands.shift
   puts "Username for pentaho?"
@@ -112,6 +112,3 @@ def handle(commands)
     puts pconn.publish_report(files, path, pubpass)
   end
 end
-
-args = ARGV
-handle(args)
