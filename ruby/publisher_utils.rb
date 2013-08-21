@@ -85,30 +85,36 @@ def handle_publish(commands)
   cmd = commands.shift
   server = commands.shift
   puts "Username for pentaho?"
-  username = 'prod.buland'
+  username = gets.chomp
   
   password = getpass :prompt => 'Password: '
   pconn = PentahoConnection.new username, password, server
   
   if cmd == 'ls'
     puts pconn.get_repo_xml
-  elsif cmd == 'help'
-    puts "publish <COMMAND> <server> [OPTIONS]"
-    puts '','', "Possible commands:"
-    puts "    ls      Show the solution repository (XML)"
-    puts "    help    Show this usage doc"
-    puts "    file    publish a file"
-    puts '', "OPTIONS"
-    puts "    For file command:"
-    puts "      publish [server] file [path] [files...]"
-  else
+  elsif cmd == 'file'
     pubpass = getpass prompt: "Publishing password?"
 
     path = commands.shift
-    files = commands
-    puts "Publishing to server: #{server}, path: #{path}, file-list: #{files}"
     # and the file list is the remainder
+    files = commands
 
+    puts "Publishing to server: #{server}, path: #{path}, file-list: #{files}"
     puts pconn.publish_report(files, path, pubpass)
+
+  else
+    puts <<-helpdoc
+Usage:
+publish <COMMAND> <server> [OPTIONS]"
+
+Possible commands:
+    ls      Show the solution repository (XML)
+    help    Show this usage doc
+    file    publish a file
+OPTIONS
+    For file command:
+        publish [server] [path] [files...]
+helpdoc
+
   end
 end
