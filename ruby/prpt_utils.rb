@@ -36,6 +36,22 @@ def change_jndi_name(prptfile, new_jndi_name)
   end
 end
 
+def print_jndi_names(prptfile)
+  Zip::ZipFile.open(prptfile, Zip::ZipFile::CREATE) do |zipfile|
+    #doc.elements["layout"].attributes[attribute] = newvalue
+    zipfile.each do |file|
+      if file.name.end_with?('sql-ds.xml')
+        datasource = REXML::Document.new zipfile.read(file)
+        jndi_definition = datasource.elements['data:sql-datasource'].elements['data:jndi']
+        if not jndi_definition.nil?
+          data_path = jndi_definition.elements['data:path']
+          puts "JNDI Connection: #{data_path.get_text}"
+        end
+      end
+    end
+  end
+end
+
 def change_lockoutput(prptfile, lock)
   change_layout_attribute(prptfile, "core:lock-preferred-output-type", lock)
 end
@@ -67,12 +83,20 @@ def handle_prpt(commands)
   cmd = commands.shift
 
 
-  if cmd =='change_output'
-    puts change_output_type(commands.shift, commands.shift)
+  if cmd =='change-output'
+    newtype = commands.shift
+    puts change_output_type(commands.shift, newtype)
   elsif cmd == 'extract-sql'
     extract_sql(commands.shift)
   elsif cmd == 'change-jndi'
-    change_jndi_name(commands.shift, commands.shift)
+    newname = commands.shift
+    commands.each do |prpt|
+      change_jndi_name(prpt, newname)
+    end
+  elsif cmd == 'get-jndi'
+    commands.each do |prpt|
+      print_jndi_names(prpt)
+    end
   else
       puts <<-helpdoc
   prpt <COMMAND> [OPTIONS]
@@ -80,9 +104,11 @@ def handle_prpt(commands)
   COMMANDS:
       help          Show this usage doc
       extract-sql   extract all the queries from a report into the current directory
-      change_output change the report output type
+      change-output change the report output type
+      change-jndi   Change the JNDI connection name
   OPTIONS
-      change_output <newtype>
+      change-output <newtype> <report...>
+      change-jndi   <newname> <report...>
   helpdoc
     if cmd != 'help'
       puts '',"I'm sorry Dave, I'm afraid I can't do that."
