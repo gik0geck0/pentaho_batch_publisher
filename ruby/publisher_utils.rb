@@ -43,7 +43,7 @@ class PentahoConnection
       #openfile.close
     end
     path = CGI::escape(path)
-    action_url = "/RepositoryFilePublisher?publishPath=#{path}&publishKey=#{get_passkey(pubpass)}&overwrite=#{overwrite}&mkdirs=#{mkdirs}"
+    action_url = "/repositoryfilepublisher?publishpath=#{path}&publishkey=#{get_passkey(pubpass)}&overwrite=#{overwrite}&mkdirs=#{mkdirs}"
 
     puts "Action url:", action_url
     return post action_url, params
@@ -84,12 +84,20 @@ end
 def handle_publish(commands)
   cmd = commands.shift
   server = commands.shift
-  puts "Username for pentaho?"
-  username = gets.chomp
-  
-  password = getpass :prompt => 'Password: '
-  pconn = PentahoConnection.new username, password, server
-  
+#  puts "CMD: #{cmd}"
+#  puts "Server: #{server}"
+  STDOUT.flush
+
+  if cmd != '--help' and !commands.include? '--help'
+    print "Username for pentaho?"
+    username = ''
+    username = gets.chomp
+    puts "Username is #{username}"
+
+    password = getpass :prompt => 'Password: '
+    pconn = PentahoConnection.new username, password, server
+  end
+
   if cmd == 'ls'
     puts pconn.get_repo_xml
   elsif cmd == 'file'
