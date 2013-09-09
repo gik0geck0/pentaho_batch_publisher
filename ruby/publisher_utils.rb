@@ -86,12 +86,11 @@ def handle_publish(commands)
   server = commands.shift
 #  puts "CMD: #{cmd}"
 #  puts "Server: #{server}"
-  STDOUT.flush
 
   if cmd != '--help' and !commands.include? '--help'
     print "Username for pentaho?"
     username = ''
-    username = gets.chomp
+    username = STDIN.gets.chomp
     puts "Username is #{username}"
 
     password = getpass :prompt => 'Password: '
