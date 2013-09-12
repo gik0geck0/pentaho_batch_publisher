@@ -1,6 +1,6 @@
 #!/usr/bin/env ruby
 
-require 'zip/zip'
+require 'zip'
 require 'rexml/document'
 
 def extract_sql(prptfile)

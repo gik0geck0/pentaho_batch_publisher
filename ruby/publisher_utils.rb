@@ -3,11 +3,11 @@
 # Set of functions that can be used to interface with a pentaho server
 #
 require 'rubygems'
-require 'getpass'
 require 'httparty'
 require 'httmultiparty'
 require 'digest/md5'
-include Getpass
+require 'io/console'
+
 
 =begin
   FILE_EXISTS = 1;
@@ -43,7 +43,7 @@ class PentahoConnection
       #openfile.close
     end
     path = CGI::escape(path)
-    action_url = "/repositoryfilepublisher?publishpath=#{path}&publishkey=#{get_passkey(pubpass)}&overwrite=#{overwrite}&mkdirs=#{mkdirs}"
+    action_url = "/RepositoryFilePublisher?publishpath=#{path}&publishkey=#{get_passkey(pubpass)}&overwrite=#{overwrite}&mkdirs=#{mkdirs}"
 
     puts "Action url:", action_url
     return post action_url, params
@@ -93,14 +93,16 @@ def handle_publish(commands)
     username = STDIN.gets.chomp
     puts "Username is #{username}"
 
-    password = getpass :prompt => 'Password: '
+    print 'Password:'
+    password = STDIN.noecho(&:gets).chomp
     pconn = PentahoConnection.new username, password, server
   end
 
   if cmd == 'ls'
     puts pconn.get_repo_xml
   elsif cmd == 'file'
-    pubpass = getpass prompt: "Publishing password?"
+    print 'Publishing Password:'
+    pubpass = STDIN.noecho(&:gets).chomp
 
     path = commands.shift
     # and the file list is the remainder
