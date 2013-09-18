@@ -62,7 +62,6 @@ def set_layout(property, value, *prptfiles)
     puts " to #{property_val}"
 
     write_file_doc(prptfile, "layout.xml", meta_doc)
-    end
   end
 end
 
@@ -100,7 +99,7 @@ def set_title(prptfile, newtitle)
 end
 
 # go through all the queries and subreports, and change the jndi name
-def change_jndi_name(prptfile, new_jndi_name)
+def set_jndi_names(prptfile, new_jndi_name)
   Zip::ZipFile.open(prptfile, Zip::ZipFile::CREATE) do |zipfile|
     #doc.elements["layout"].attributes[attribute] = newvalue
     zipfile.each do |file|
@@ -122,7 +121,7 @@ def change_jndi_name(prptfile, new_jndi_name)
   end
 end
 
-def print_jndi_names(prptfile)
+def get_jndi_names(prptfile)
   Zip::ZipFile.open(prptfile, Zip::ZipFile::CREATE) do |zipfile|
     #doc.elements["layout"].attributes[attribute] = newvalue
     zipfile.each do |file|
@@ -191,7 +190,8 @@ def handle_prpt(commands)
     "creator" => "meta:dc:creator",
     "subject" => "meta:dc:subject",
     "output-type" => "layout:core:preferred-output-type",
-    "output-lock" => "layout:core:lock-preferred-output-type"
+    "output-lock" => "layout:core:lock-preferred-output-type",
+    "jndi" => "jndi_names"
   }
   property = property_map[dash_split[1]]
   puts "property: #{property}", "Command: #{cmd}", "Dash_split: #{dash_split}"
@@ -204,12 +204,17 @@ def handle_prpt(commands)
     section_split = property.split(':', 2)
     command += '_' + section_split[0]
 
+    if section_split.length > 1
+      commands.unshift section_split[1]
+    end
+
     puts "Remaining Commands: #{commands}"
     # Section_split[1] contains the property value that we're interested in. Might be the subject, description, title, output, etc...
     # *commands expands all the remaining command-line arguments into the function call
-    send(command, section_split[1], *commands)
+    send(command, *commands)
   else
-    # Fallback for when the command is not in the property map (either something a little more complex is happening, or we have no idea what they want
+    # Fallback for when the command is not in the property map. Most likely, we have no idea what the user wants.
+    
     puts <<-helpdoc
     prpt <COMMAND> [OPTIONS]
 

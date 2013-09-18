@@ -81,13 +81,7 @@ class PentahoConnection
 
 end
 
-def handle_publish(commands)
-  cmd = commands.shift
-  server = commands.shift
-#  puts "CMD: #{cmd}"
-#  puts "Server: #{server}"
-
-  if cmd != '--help' and !commands.include? '--help'
+def get_auth(server)
     print "Username for pentaho?"
     username = ''
     username = STDIN.gets.chomp
@@ -95,16 +89,29 @@ def handle_publish(commands)
 
     print 'Password:'
     password = STDIN.noecho(&:gets).chomp
-    pconn = PentahoConnection.new username, password, server
-  end
+    return pconn = PentahoConnection.new username, password, server
+end
+
+def handle_publish(commands)
+  cmd = commands.shift
+  server = commands.shift
 
   if cmd == 'ls'
+    pconn = get_auth(server)
     puts pconn.get_repo_xml
   elsif cmd == 'file'
+    pconn = get_auth(server)
+
     print 'Publishing Password:'
     pubpass = STDIN.noecho(&:gets).chomp
 
     path = commands.shift
+    # Check if this path starts with /  If not, we'll have to assume it's a report file or xaction, and resort to using the server browser
+    if path[0] != '/'
+      commands.unshift path
+      path = browse_server_for_path pconn
+    end
+
     # and the file list is the remainder
     files = commands
 
