@@ -13,6 +13,40 @@ def extract_sql(prptfile)
   end
 end
 
+def get_title(prptfile)
+  meta_doc = get_file_doc(prptfile, "meta.xml")
+  title_elem = meta_doc.elements['office:document-meta'].elements['office:meta'].elements['dc:title']
+  if not title_elem.nil?
+    return title_elem.text
+  else
+    return ""
+  end
+=begin
+  Zip::ZipFile.open(prptfile, Zip::ZipFile::CREATE) do |zipfile|
+    doc = REXML::Document.new zipfile.read("meta.xml")
+    title_elem = doc.elements['office:document-meta'].elements['office:meta'].elements['dc:title']
+    if not title_elem.nil?
+      return title_elem.text
+    else
+      return ""
+    end
+  end
+=end
+end
+
+def set_title(prptfile, newtitle)
+  meta_doc = get_file_doc(prptfile, "meta.xml")
+  title_elem = meta_doc.elements['office:document-meta'].elements['office:meta'].elements['dc:title']
+
+  if not title_elem.nil?
+    print "Changing report title from #{title_elem.text}"
+    title_elem.text = newtitle
+    puts " to #{title_elem.text}"
+
+    write_file_doc(prptfile, "meta.xml", meta_doc)
+  end
+end
+
 # go through all the queries and subreports, and change the jndi name
 def change_jndi_name(prptfile, new_jndi_name)
   Zip::ZipFile.open(prptfile, Zip::ZipFile::CREATE) do |zipfile|
@@ -74,8 +108,21 @@ def change_layout_attribute(prptfile, attribute, newvalue)
 end
 
 def get_layout_attribute(prptfile, attribute)
+  layout_doc = get_file_doc(prptfile, "layout.xml")
+  return layout_doc.elements["layout"].attributes[attribute]
+end
+
+def get_file_doc(prptfile, filename)
   Zip::ZipFile.open(prptfile, Zip::ZipFile::CREATE) do |zipfile|
-    return doc.elements["layout"].attributes[attribute]
+    return REXML::Document.new zipfile.read(filename)
+  end
+end
+
+def write_file_doc(prptfile, filename, xmldoc)
+  Zip::ZipFile.open(prptfile, Zip::ZipFile::CREATE) do |zipfile|
+    zipfile.get_output_stream(filename) do |zos|
+      zos.write(xmldoc.to_s)
+    end
   end
 end
 
@@ -97,6 +144,14 @@ def handle_prpt(commands)
     commands.each do |prpt|
       print_jndi_names(prpt)
     end
+  elsif cmd == 'change-title'
+    prpt = commands.shift
+    new_title = commands.shift
+
+    set_title prpt, new_title
+  elsif cmd == 'get-title'
+    prpt = commands.shift
+    puts get_title prpt
   else
       puts <<-helpdoc
   prpt <COMMAND> [OPTIONS]
@@ -104,6 +159,7 @@ def handle_prpt(commands)
   COMMANDS:
       help          Show this usage doc
       extract-sql   extract all the queries from a report into the current directory
+      get-title     Show the title of the report
       change-output change the report output type
       change-jndi   Change the JNDI connection name
   OPTIONS
