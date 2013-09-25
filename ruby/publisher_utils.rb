@@ -27,7 +27,7 @@ class PentahoConnection
 
   public # public methods allow interfacing with the pentaho server with specific actions
 
-  # Gets the XML representation of a pentaho server's solution repository
+  # Gets the hash representation of a pentaho server's solution repository
   def get_repo_hash
     return get '/SolutionRepositoryService?component=getSolutionRepositoryDoc'
   end
@@ -152,11 +152,50 @@ class PentahoConnection
     end
   end
 
+  # Return the path of the specified target directory
+  def use(rootnode, pwdnode, targetdir)
+    if pwdnode["path"].nil?
+      puts "ERROR: The current directory has no path. We cannot find the targetdir's path"
+    else
+      if targetdir.nil?
+        puts "Cannot use a NIL directory"
+      else
+        puts "Trying to use #{targetdir} from #{pwdnode['path']}"
+        if targetdir =~ /^\d+$/
+          puts "Tgtdir was an integer: #{targetdir}"
+          targetdir = get_pwd_hash(pwdnode)[targetdir.to_i]
+          if targetdir.nil?
+            puts "Sorry, but that folder is outside the range."
+            return nil
+          end
+          puts "Changed tgtdir to the real-name: #{targetdir}"
+        end
+
+        filelist = pwdnode["file"]
+        if not filelist.nil?
+          filelist.each do |f|
+            if f["name"] == targetdir
+              puts "Verified, and using #{targetdir}"
+              if f["path"].nil?
+                # If the desired directory doesn't yet have a path, define it as the previous directory's path + the next directory's name
+                f["path"] = pwdnode["path"] + '/' + f["name"]
+              end
+              return f["path"]
+            end
+          end
+        end
+      end
+    end
+  end
+
   def browse_server_for_path
     raw_hash = get_repo_hash
     # Initialize PWD to root
     rootnode = raw_hash.parsed_response["repository"]
+    rootnode["path"] = '/'
     rootnode["name"] = rootnode["path"][1, rootnode["path"].length]
+    # We set the rootnode's path to /
+    puts "Rootnode name is #{rootnode['name']} and path is #{rootnode['path']}"
     pwdnode = rootnode
 
     loop do
@@ -172,12 +211,23 @@ class PentahoConnection
       elsif command == 'ls'
         show_pwd(pwdnode)
         #puts get_pwd(pwdnode)
-      elsif command == 'use'
       else
-        command_split = command.split(' ')
-        maybe_newpwd = send(command_split.shift, rootnode, pwdnode, *command_split)
-        if not maybe_newpwd.nil?
-          pwdnode = maybe_newpwd
+        command_split = command.split(' ', 2)
+        if command_split[0] == 'use'
+          # The user is specifying the folder to deploy to. We want to stop the repl, and return that folder path
+          deploy_path = use(rootnode, pwdnode, command_split[1])
+          if deploy_path.nil?
+            puts "Sorry, cannot use that directory"
+          else
+            puts "Deploy path was chosen: #{deploy_path}"
+            # TODO Reduce any sequences of '/' to just 1. (Remove //'s)
+            #return deploy_path
+          end
+        else
+          maybe_newpwd = send(command_split.shift, rootnode, pwdnode, *command_split)
+          if not maybe_newpwd.nil?
+            pwdnode = maybe_newpwd
+          end
         end
       end
     end
@@ -193,9 +243,13 @@ class PentahoConnection
   end
 
   def show_pwd(pwdnode)
-    puts "0: #{pwdnode["name"]}"
-    pwdnode["file"].to_enum.with_index(1).each do |filefolder, index|
-      puts "#{index}: #{filefolder["name"]}"
+    puts "0 (pwd): #{pwdnode["name"]}"
+    index = 1
+    pwdnode["file"].each do |filefolder|
+      if filefolder["isDirectory"] == 'true'
+        puts "#{index}: #{filefolder["name"]}"
+        index += 1
+      end
     end
   end
 
@@ -234,7 +288,7 @@ def get_auth(server)
     print "Username for pentaho?"
     username = ''
     username = STDIN.gets.chomp
-    puts "Username is #{username}"
+    #puts "Username is #{username}"
 
     print 'Password:'
     password = STDIN.noecho(&:gets).chomp
@@ -252,6 +306,7 @@ def handle_publish(commands)
   elsif cmd == 'browse'
     pconn = get_auth(server)
     path = pconn.browse_server_for_path
+    puts "Chosen path: #{path}"
   elsif cmd == 'file'
     pconn = get_auth(server)
 
