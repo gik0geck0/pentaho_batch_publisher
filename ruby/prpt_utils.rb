@@ -137,6 +137,14 @@ def get_jndi_names(prptfile)
   end
 end
 
+def get_output_type(prptfile)
+  return get_layout_attribute(prptfile, 'core:preferred-output-type')
+end
+
+def get_output_lock(prptfile)
+  return get_layout_attribute(prptfile, 'core:lock-preferred-output-type')
+end
+
 def change_lockoutput(prptfile, lock)
   change_layout_attribute(prptfile, "core:lock-preferred-output-type", lock)
 end

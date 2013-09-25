@@ -8,6 +8,8 @@ require 'httmultiparty'
 require 'digest/md5'
 require 'io/console'
 require 'pp'
+require 'terminal-table'
+require_relative 'prpt_utils'
 
 
 =begin
@@ -52,7 +54,7 @@ class PentahoConnection
     path = CGI::escape(path)
     action_url = "/RepositoryFilePublisher?publishpath=#{path}&publishkey=#{get_passkey(pubpass)}&overwrite=#{overwrite}&mkdirs=#{mkdirs}"
 
-    puts "Action url:", action_url
+    #puts "Action url:", action_url
     return post action_url, params
   end
 
@@ -284,45 +286,159 @@ class PentahoConnection
   end
 end
 
-def get_auth(server)
+# Takes a mapping file 'local file name' => 'server file name'
+# And asks the user for any edits they'd like to make: report title, output-type, server-file-name, etc.
+def ask_edits(file_hash)
+  ready = false
+  while not ready
+    puts "Index \tLocalName \tRemoteName \tTitle \tOutput \tLock?"
+    file_table = [['Index', 'LocalName', 'RemoteName', 'Title', 'Output', 'Lock?']]
+
+    # Generate a mapping from index to file_name when displaying the files
+    index = 1
+    # Create a 2D array to be used by Terminal-Table
+    file_hash.each do |key, value|
+      this_row = []
+      this_row << index.to_s
+      this_row << key.to_s
+      this_row << value.to_s
+      this_row << get_title(key)
+      this_row << get_output_type(key)
+      this_row << get_output_lock(key)
+      file_table << this_row
+
+      index += 1
+    end
+
+    # Type-check everything. EVERYTHING should be a string
+    # Not exactly necesary
+=begin
+    errors = false
+    file_table.each_index do |rindex|
+      this_row = file_table[rindex]
+      this_row.each_index do |cindex|
+        this_col = this_row[cindex]
+        if not this_col.is_a? String
+          puts "The value at #{rindex},#{cindex} was NOT a string. It was a #{this_col.class}"
+          errors = true
+        end
+      end
+    end
+    if errors
+      puts 'AH! Type-errors arose!'
+      exit(0)
+    end
+=end
+
+    # Display the table
+    puts 'Displaying the table!'
+    puts Terminal::Table.new rows: file_table
+
+    puts 'Which file would you like to edit?'
+    filenum = STDIN.gets.chomp
+    if filenum =~ /^\d+$/
+      filenum = filenum.to_i
+    else
+      puts 'Please choose one of the file-indexes'
+      next
+    end
+
+    # TODO Modify that file
+    if filenum > file_table.length-1
+      puts 'Index out of range.'
+      next
+    end
+
+    if filenum == '0'
+      break
+    end
+  end
+
+  return file_hash
+end
+
+# Returns a list of length=2 (used like a tuple) containing the username and password
+def get_username()
     print "Username for pentaho?"
     username = ''
     username = STDIN.gets.chomp
-    #puts "Username is #{username}"
+    return username
+end
 
+def get_password()
     print 'Password:'
     password = STDIN.noecho(&:gets).chomp
     puts ''
-    return pconn = PentahoConnection.new(username, password, server)
+    return password
 end
 
 def handle_publish(commands)
   cmd = commands.shift
-  server = commands.shift
 
   if cmd == 'ls'
-    pconn = get_auth(server)
+    server = commands.shift
+    pconn = PentahoConnection.new(get_username(), get_password(), server)
     puts pconn.get_repo_hash
   elsif cmd == 'browse'
-    pconn = get_auth(server)
+    server = commands.shift
+    pconn = PentahoConnection.new(get_username(), get_password(), server)
     path = pconn.browse_server_for_path
     puts "Chosen path: #{path}"
   elsif cmd == 'file'
-    pconn = get_auth(server)
+    username = get_username()
+    password = get_password()
+    serverlist = [server]
 
+    # Capture all the next arguments that begin with 'http://'
+    # Those will be servers to publish to
+    loop do
+      if commands[0].start_with?('http://')
+        serverlist << commands.shift
+      else
+        break
+      end
+    end
 
     path = commands.shift
-    # Check if this path starts with /  If not, we'll have to assume it's a report file or xaction, and resort to using the server browser
     if path[0] != '/'
       commands.unshift path
-      path = pconn.browse_server_for_path
+      path = nil
     end
 
     # and the file list is the remainder
     files = commands
 
-    #puts "Publishing to server: #{server}, path: #{path}, file-list: #{files}"
-    #puts pconn.publish_report(files, path, pubpass)
+    # Default server-names to the name of the file
+    files_hash = {}
+    files.each do |f|
+      files_hash[f] = f
+    end
+
+
+    # ask for any final file-edits
+    # Afterwards, the publishing commences
+    files_hash = ask_edits(files_hash)
+
+    # TODO: Create the file->binary hash
+
+    # Check if this path starts with /  If not, we'll have to assume it's a report file or xaction, and resort to using the server browser
+
+    # Iterate over all the servers, and publish to each
+    serverlist.each do |server|
+      pconn = PentahoConnection.new(username, password, server)
+
+      if path.nil?
+        path = pconn.browse_server_for_path
+      end
+      puts "Publishing to server: #{server}, path: #{path}, file-list: #{files}"
+
+
+      #puts pconn.publish_report(files, path, pubpass)
+
+    end
+
+
+
 
   else
     puts <<-helpdoc
