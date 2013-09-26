@@ -145,11 +145,11 @@ def get_output_lock(prptfile)
   return get_layout_attribute(prptfile, 'core:lock-preferred-output-type')
 end
 
-def change_lockoutput(prptfile, lock)
+def set_output_lock(prptfile, lock)
   change_layout_attribute(prptfile, "core:lock-preferred-output-type", lock)
 end
 
-def change_output_type(prptfile, type)
+def set_output_type(prptfile, type)
   #puts "Previous output type: #{get_layout_attribute(prptfile, 'core:preferred-output-type')}"
   change_layout_attribute(prptfile, 'core:preferred-output-type', type)
   #puts "New output type: #{get_layout_attribute(prptfile, 'core:preferred-output-type')}"

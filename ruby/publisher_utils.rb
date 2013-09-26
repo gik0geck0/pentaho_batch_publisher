@@ -200,6 +200,17 @@ class PentahoConnection
     puts "Rootnode name is #{rootnode['name']} and path is #{rootnode['path']}"
     pwdnode = rootnode
 
+    helpdoc = <<-HELPDOC
+    Available commands:
+      help    show this list of commands
+      ls      list contents of the current directory
+      cd      change current directory to another (specified by either index or Name. Previous directory is '..'
+      use     choose a directory (specified by either index, or Name)
+      exit    quit, and decide not to choose a directory
+    HELPDOC
+    puts helpdoc
+
+
     loop do
       if pwdnode.nil?
         puts 'WTF bro? the PWD is nil!'
@@ -213,6 +224,8 @@ class PentahoConnection
       elsif command == 'ls'
         show_pwd(pwdnode)
         #puts get_pwd(pwdnode)
+      elsif command =='help'
+        puts helpdoc
       else
         command_split = command.split(' ', 2)
         if command_split[0] == 'use'
@@ -223,7 +236,7 @@ class PentahoConnection
           else
             puts "Deploy path was chosen: #{deploy_path}"
             # TODO Reduce any sequences of '/' to just 1. (Remove //'s)
-            #return deploy_path
+            return deploy_path
           end
         else
           maybe_newpwd = send(command_split.shift, rootnode, pwdnode, *command_split)
@@ -335,6 +348,7 @@ def ask_edits(file_hash)
     puts Terminal::Table.new rows: file_table
 
     puts 'Which file would you like to edit?'
+    puts 'Select it by the index. Choosing an index of 0 will indicate that you are done editing.'
     filenum = STDIN.gets.chomp
     if filenum =~ /^\d+$/
       filenum = filenum.to_i
@@ -344,13 +358,60 @@ def ask_edits(file_hash)
     end
 
     # TODO Modify that file
-    if filenum > file_table.length-1
+    if filenum > file_table.length
       puts 'Index out of range.'
       next
-    end
-
-    if filenum == '0'
+    elsif filenum == 0
+      # choosing 0 means no edits are desired
       break
+    else
+      loop do
+        # Alright. Let's modify it!
+        puts "You chose the file #{file_table[filenum][1]}"
+        puts 'What would you like to change?'
+        puts '0: Cancel'
+        puts "1: Destination : #{file_table[filenum][2]}"
+        puts "2: Title       : #{file_table[filenum][3]}"
+        puts "3: Output-Type : #{file_table[filenum][4]}"
+        puts "4: Output-Lock : #{file_table[filenum][5]}"
+        puts "5: Remove File"
+        edit_choice = STDIN.gets.chomp
+        if edit_choice =~ /^\d+$/
+          edit_choice = edit_choice.to_i
+          if edit_choice == 0
+            break
+          elsif edit_choice == 5
+            puts "Removing #{file_table[filenum][1]}!"
+            file_table.pop!(filenum)
+          else
+            puts 'New value?'
+            nval = STDIN.gets.chomp
+            if edit_choice == 1
+              # Change the file hash's value, using the key from the file_table, so that next outer-loop will refresh the table, and capture the new value
+              file_hash[file_table[filenum][1]] = nval
+              break
+            else
+              # Do a call into the prpt utils to change the report
+              # file_table[filenum][1] == The report's local name/location
+              if edit_choice == 2
+                set_title(file_table[filenum][1], nval)
+              elsif edit_choice == 3
+                set_output_type(file_table[filenum][1], nval)
+              elsif edit_choice == 4
+                set_output_lock(file_table[filenum][1], nval)
+              else
+                put "I don't actually know how you got here...??"
+              end
+
+              # Finish editings. Refresh file-list
+              break
+            end
+          end
+        else
+          puts "That's not a valid choice. Please try again"
+          next
+        end
+      end
     end
   end
 
@@ -387,10 +448,11 @@ def handle_publish(commands)
   elsif cmd == 'file'
     username = get_username()
     password = get_password()
-    serverlist = [server]
+    serverlist = []
 
     # Capture all the next arguments that begin with 'http://'
     # Those will be servers to publish to
+    puts "Server list is #{serverlist}"
     loop do
       if commands[0].start_with?('http://')
         serverlist << commands.shift
@@ -398,6 +460,7 @@ def handle_publish(commands)
         break
       end
     end
+    puts "Server list is #{serverlist}"
 
     path = commands.shift
     if path[0] != '/'
@@ -428,6 +491,7 @@ def handle_publish(commands)
       pconn = PentahoConnection.new(username, password, server)
 
       if path.nil?
+        puts "Getting path from the server #{server}"
         path = pconn.browse_server_for_path
       end
       puts "Publishing to server: #{server}, path: #{path}, file-list: #{files}"
