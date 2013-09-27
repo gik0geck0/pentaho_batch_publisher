@@ -12,13 +12,6 @@ require 'terminal-table'
 require_relative 'prpt_utils'
 
 
-=begin
-  FILE_EXISTS = 1;
-  FILE_ADD_FAILED = 2;
-  FILE_ADD_SUCCESSFUL = 3;
-  FILE_ADD_INVALID_PUBLISH_PASSWORD = 4;
-  FILE_ADD_INVALID_USER_CREDENTIALS = 5;
-=end
 
 class PentahoConnection
 
@@ -42,20 +35,25 @@ class PentahoConnection
   # Publish a list of prpts to the pentaho server
   def publish_report(files, path, pubpass=get_pub_pass(), overwrite=true, mkdirs=false)
 
-    params = {}
+    # files used to be a list of only local filepaths. files is now a hash from remotename => binarydata
+    # What used to be params (a hash of MultiPart components) is now files
+
+    # Moved to just outside the publish function
+    # params = {}
     # files should be a list of file names
-    files.each do |f|
-      puts "Filename: #{CGI::escape(f)}"
-      openfile = File.new f, 'rb'
-      params[URI.encode(f)] = openfile#.read #.encode(Encoding::UTF_8)
+    #files.each do |f|
+    #  puts "Filename: #{CGI::escape(f)}"
+
+      #openfile = File.new f, 'rb'
+      #params[URI.encode(f)] = openfile#.read #.encode(Encoding::UTF_8)
       #v = URI.escape(params[URI.encode(f)], Regexp.new("[^#{URI::PATTERN::UNRESERVED}]"))
       #openfile.close
-    end
+    #end
     path = CGI::escape(path)
     action_url = "/RepositoryFilePublisher?publishpath=#{path}&publishkey=#{get_passkey(pubpass)}&overwrite=#{overwrite}&mkdirs=#{mkdirs}"
 
     #puts "Action url:", action_url
-    return post action_url, params
+    return post action_url, files
   end
 
   # Starting at a certain node, recurse through the file-paths, and get an ending node
@@ -250,7 +248,7 @@ class PentahoConnection
           if deploy_path.nil?
             puts "Sorry, cannot use that directory"
           else
-            # TODO Reduce any sequences of '/' to just 1. (Remove //'s)
+            # Reduce any sequences of '/' to just 1. (Remove //'s)
             deploy_path = deploy_path.sub /\/\/+/, '/'
             puts "Deploy path was chosen: #{deploy_path}"
             return deploy_path
@@ -325,7 +323,6 @@ end
 def ask_edits(file_hash)
   ready = false
   while not ready
-    puts "Index \tLocalName \tRemoteName \tTitle \tOutput \tLock?"
     file_table = [['Index', 'LocalName', 'RemoteName', 'Title', 'Output', 'Lock?']]
 
     # Generate a mapping from index to file_name when displaying the files
@@ -365,7 +362,6 @@ def ask_edits(file_hash)
 =end
 
     # Display the table
-    puts 'Displaying the table!'
     puts Terminal::Table.new rows: file_table
 
     puts 'Which file would you like to edit?'
@@ -378,7 +374,6 @@ def ask_edits(file_hash)
       next
     end
 
-    # TODO Modify that file
     if filenum > file_table.length
       puts "Index out of range. Expected < #{file_table.length}, but got #{filenum}"
       next
@@ -450,8 +445,8 @@ def get_username()
     return username
 end
 
-def get_password()
-    print 'Password:'
+def get_password(prompt='Password:')
+    print prompt
     password = STDIN.noecho(&:gets).chomp
     puts ''
     return password
@@ -476,7 +471,7 @@ def handle_publish(commands)
 
     # Capture all the next arguments that begin with 'http://'
     # Those will be servers to publish to
-    puts "Server list is #{serverlist}"
+    #puts "Server list is #{serverlist}"
     loop do
       if commands[0].start_with?('http://')
         serverlist << commands.shift
@@ -484,7 +479,7 @@ def handle_publish(commands)
         break
       end
     end
-    puts "Server list is #{serverlist}"
+    #puts "Server list is #{serverlist}"
 
     path = commands.shift
     if path[0] != '/'
@@ -506,7 +501,12 @@ def handle_publish(commands)
     # Afterwards, the publishing commences
     files_hash = ask_edits(files_hash)
 
-    # TODO: Create the file->binary hash
+    # Create the file->binary hash
+    binary_hash = {}
+    files_hash.each do |localfname, remotefname|
+      openfile = File.new localfname, 'rb'
+      binary_hash[URI.encode(remotefname)] = openfile
+    end
 
     # Check if this path starts with /  If not, we'll have to assume it's a report file or xaction, and resort to using the server browser
 
@@ -521,7 +521,36 @@ def handle_publish(commands)
       puts "Publishing to server: #{server}, path: #{path}, file-list: #{files}"
 
 
-      #puts pconn.publish_report(files, path, pubpass)
+      pubpass = get_password("Publishing Password:")
+      # Chomp the end. There's likely newlines
+      publish_response = pconn.publish_report(files_hash, path, pubpass).chomp
+      puts 'Finished the publish command'
+
+=begin
+  FILE_EXISTS = 1;
+  FILE_ADD_FAILED = 2;
+  FILE_ADD_SUCCESSFUL = 3;
+  FILE_ADD_INVALID_PUBLISH_PASSWORD = 4;
+  FILE_ADD_INVALID_USER_CREDENTIALS = 5;
+=end
+      response_meanings = {
+        '1' => "Error: File exists. Did you mean to turn replacement on?",
+        '2' => "Error: File Add Failed. (Though I don't have any information on why)",
+        '3' => "Report Published Sucessfully!",
+        '4' => "Error: Invalid Publishing Password.",
+        '5' => "Error: Invalid user credentials."
+      }
+      puts "Response was: #{publish_response}. What is lookup 2? #{response_meanings['2']}"
+      meaningful_response = response_meanings[publish_response]
+      if not meaningful_response.nil?
+        puts meaningful_response
+      else
+        puts "Publish failed for some unknown reason. Would you like to see the response from the BI-server? (y/n)"
+        want_to_see = STDIN.gets.chomp.downcase
+        if want_to_see == 'y'
+          puts publish_response
+        end
+      end
 
     end
 
