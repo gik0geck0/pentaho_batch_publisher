@@ -96,15 +96,19 @@ class PentahoConnection
     end
 
     if cmdargs.length > 0
-      tgtdir = cmdargs.shift
-      if /^\d+$/ =~ tgtdir
-        puts "Tgtdir was an integer: #{tgtdir}"
-        tgtdir = get_pwd_hash(pwdnode)[tgtdir.to_i]
+      dirnum = cmdargs.shift
+      if /^\d+$/ =~ dirnum
+        #puts "Tgtdir was an integer: #{dirnum}"
+        pwd_hash = get_pwd_hash(pwdnode, true)
+        #puts "Full PwdHash is #{pwd_hash}"
+        tgtdir = pwd_hash[dirnum.to_i]
         if tgtdir.nil?
-          puts "Sorry, but that folder is outside the range."
+          puts "Index out of range. Expected < #{pwd_hash.length}, but got #{dirnum.to_i}"
           return nil
         end
         puts "Changed tgtdir to the real-name: #{tgtdir}"
+      else
+        tgtdir = dirnum
       end
 
       if pwdnode["path"].nil?
@@ -113,6 +117,7 @@ class PentahoConnection
 
       chdir = nil
       if tgtdir == '..'
+        #puts "CDing ..  #{pwdnode['path'].nil?}"
         if not pwdnode["path"].nil?
           # We need the pwdnode's path not to be null, since we're going to use it to determine the previous directory
           pathSplit = pwdnode["path"].split('/')
@@ -124,6 +129,7 @@ class PentahoConnection
           #puts "Path split for .. was #{pathSplit}"
           if pathSplit.length >= 1
             chdir = node_recurse rootnode, (pathSplit.first pathSplit.length-1)
+            #puts "Chdir is now #{chdir}"
           else
             # If the pathSplit without the root-name has no length, then we're trying to do /.. (cd .. from root)
             # Do nothing.
@@ -134,7 +140,7 @@ class PentahoConnection
         if not filelist.nil?
           filelist.each do |f|
             if f["name"] == tgtdir
-              puts "CDing to #{tgtdir}"
+              #puts "CDing to #{tgtdir}"
               if f["path"].nil?
                 # If the desired directory doesn't yet have a path, define it as the previous directory's path + the next directory's name
                 f["path"] = pwdnode["path"] + '/' + f["name"]
@@ -162,22 +168,32 @@ class PentahoConnection
       if targetdir.nil?
         puts "Cannot use a NIL directory"
       else
-        puts "Trying to use #{targetdir} from #{pwdnode['path']}"
+        #puts "Trying to use #{targetdir} from #{pwdnode['path']}"
         if targetdir =~ /^\d+$/
-          puts "Tgtdir was an integer: #{targetdir}"
-          targetdir = get_pwd_hash(pwdnode)[targetdir.to_i]
-          if targetdir.nil?
-            puts "Sorry, but that folder is outside the range."
-            return nil
+          #puts "Tgtdir was an integer: #{targetdir}"
+          if targetdir.to_i > 0
+            targetdir = get_pwd_hash(pwdnode, true)[targetdir.to_i]
+            if targetdir.nil?
+              puts "Sorry, but that folder is outside the range."
+              return nil
+            end
+          else
+            # Choosing 0 means choose this directory
+            # I guess if a negative number is chosen, then we'll just assume use .
+            return pwdnode["path"]
           end
           puts "Changed tgtdir to the real-name: #{targetdir}"
+        elsif targetdir == '.'
+          # use . == use PWD
+          return pwdnode["path"]
         end
+
 
         filelist = pwdnode["file"]
         if not filelist.nil?
           filelist.each do |f|
             if f["name"] == targetdir
-              puts "Verified, and using #{targetdir}"
+              #puts "Verified, and using #{targetdir}"
               if f["path"].nil?
                 # If the desired directory doesn't yet have a path, define it as the previous directory's path + the next directory's name
                 f["path"] = pwdnode["path"] + '/' + f["name"]
@@ -197,7 +213,7 @@ class PentahoConnection
     rootnode["path"] = '/'
     rootnode["name"] = rootnode["path"][1, rootnode["path"].length]
     # We set the rootnode's path to /
-    puts "Rootnode name is #{rootnode['name']} and path is #{rootnode['path']}"
+    #puts "Rootnode name is #{rootnode['name']} and path is #{rootnode['path']}"
     pwdnode = rootnode
 
     helpdoc = <<-HELPDOC
@@ -234,10 +250,15 @@ class PentahoConnection
           if deploy_path.nil?
             puts "Sorry, cannot use that directory"
           else
-            puts "Deploy path was chosen: #{deploy_path}"
             # TODO Reduce any sequences of '/' to just 1. (Remove //'s)
+            deploy_path = deploy_path.sub /\/\/+/, '/'
+            puts "Deploy path was chosen: #{deploy_path}"
             return deploy_path
           end
+        elsif command_split[0] == 'ls'
+          # Remove the ls, so we can use its args
+          com = command_split.shift
+          show_pwd(pwdnode, *command_split)
         else
           maybe_newpwd = send(command_split.shift, rootnode, pwdnode, *command_split)
           if not maybe_newpwd.nil?
@@ -249,21 +270,31 @@ class PentahoConnection
   end
 
   # Make a mapping from index to file/folder name, and return that map
-  def get_pwd_hash(pwdnode)
+  def get_pwd_hash(pwdnode, dir_only=false)
     pwd_hash = {}
-    pwdnode["file"].to_enum.with_index(1).each do |filefolder, index|
-      pwd_hash[index] = filefolder["name"]
+    index = 1
+    pwdnode["file"].each do |filefolder|
+      if !dir_only or filefolder["isDirectory"] == 'true'
+        pwd_hash[index] = filefolder["name"]
+        index += 1
+      end
     end
     return pwd_hash
   end
 
-  def show_pwd(pwdnode)
+  def show_pwd(pwdnode, *args)
+    show_all = false
+    if args.include?('-a')
+      show_all = true
+    end
     puts "0 (pwd): #{pwdnode["name"]}"
     index = 1
     pwdnode["file"].each do |filefolder|
       if filefolder["isDirectory"] == 'true'
         puts "#{index}: #{filefolder["name"]}"
         index += 1
+      elsif show_all
+        puts " : #{filefolder["name"]}"
       end
     end
   end
@@ -287,16 +318,6 @@ class PentahoConnection
     return HTTMultiParty.post(server+action, query: query, basic_auth: auth, base_uri: server)
   end
 
-  def searchy(thingy)
-    thingy.each do |thing|
-      if not thing.kind_of?(Array)
-        puts "testing", thing
-        puts "InQuery: #{thing}", URI.escape(thing, Regexp.new("[^#{URI::PATTERN::UNRESERVED}]"))
-      else
-        searchy(thing)
-      end
-    end
-  end
 end
 
 # Takes a mapping file 'local file name' => 'server file name'
@@ -359,7 +380,7 @@ def ask_edits(file_hash)
 
     # TODO Modify that file
     if filenum > file_table.length
-      puts 'Index out of range.'
+      puts "Index out of range. Expected < #{file_table.length}, but got #{filenum}"
       next
     elsif filenum == 0
       # choosing 0 means no edits are desired
@@ -394,10 +415,13 @@ def ask_edits(file_hash)
               # Do a call into the prpt utils to change the report
               # file_table[filenum][1] == The report's local name/location
               if edit_choice == 2
+                puts "Setting title to #{nval}"
                 set_title(file_table[filenum][1], nval)
               elsif edit_choice == 3
+                puts "Setting output to #{nval}"
                 set_output_type(file_table[filenum][1], nval)
               elsif edit_choice == 4
+                puts "Setting output lock to #{nval}"
                 set_output_lock(file_table[filenum][1], nval)
               else
                 put "I don't actually know how you got here...??"
