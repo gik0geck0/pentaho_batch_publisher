@@ -1,0 +1,7 @@
+source "https://rubygems.org"
+
+gem 'httparty'
+gem 'httmultiparty'
+gem 'terminal-table'
+gem 'zip'
+gem 'rexml'

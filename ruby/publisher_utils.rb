@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 
 # Set of functions that can be used to interface with a pentaho server
-#
+
 require 'rubygems'
 require 'httparty'
 require 'httmultiparty'
@@ -10,7 +10,6 @@ require 'io/console'
 require 'pp'
 require 'terminal-table'
 require_relative 'prpt_utils'
-
 
 
 class PentahoConnection
