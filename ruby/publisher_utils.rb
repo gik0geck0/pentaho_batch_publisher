@@ -566,9 +566,11 @@ Possible commands:
     ls      Show the solution repository (XML)
     help    Show this usage doc
     file    publish a file
-    browse  browse the server
+    browse  browse the server interactively
+
 OPTIONS
-      publish file [server] [path] [files...]
+      publish file <servers...> [path] <files...>
+          if the path is not specified, an interactive server-browser will be used
       publish browse [server]
 helpdoc
 
