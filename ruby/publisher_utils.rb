@@ -24,12 +24,23 @@ class PentahoConnection
 
   # Gets the hash representation of a pentaho server's solution repository
   def get_repo_hash
-    return get '/SolutionRepositoryService?component=getSolutionRepositoryDoc'
+    begin
+    hash = get '/SolutionRepositoryService?component=getSolutionRepositoryDoc'
+    rescue Errno::ECONNREFUSED
+      puts 'Connection refused. Bad username/password combo?'
+      exit(-1)
+    end
   end
 
   def get_pub_pass
     print 'Publishing Password:'
-    return STDIN.noecho(&:gets).chomp
+    pubpass = get_stdin(:noecho)
+    if pubpass.nil?
+      cancel_publish
+    else
+      pubpass.chomp!
+      return pubpass
+    end
   end
 
   # Publish a list of prpts to the pentaho server
@@ -230,7 +241,7 @@ class PentahoConnection
         puts 'WTF bro? the PWD is nil!'
       end
       print '%> '
-      command = STDIN.gets.chomp
+      command = get_stdin()
       if command.nil?
         puts "I'm sorry, but that's not a valid command!"
       elsif command == 'exit'
@@ -318,6 +329,62 @@ class PentahoConnection
 
 end
 
+########## Helper Functions ##########
+
+def cancel_publish
+    puts 'Cancelling publish'
+    exit(-1)
+end
+
+# STDIN.gets.chomp with nil-protection (like if C-d is pressed)
+# This is used mostly to decrease the number of errors generated
+def get_stdin(*args)
+    if args.include?(:noecho)
+      val = STDIN.noecho(&:gets)
+    else
+      val = STDIN.gets
+    end
+
+    if val.nil?
+      cancel_publish
+    else
+      val.chomp!
+      return val
+    end
+end
+
+def get_username()
+    print "Username for pentaho?"
+    username = ''
+    username = get_stdin()
+    return username
+end
+
+def get_password(prompt='Password:')
+    print prompt
+    password = get_stdin(:noecho)
+    puts ''
+    return password
+end
+
+def print_help()
+    puts <<-helpdoc
+Usage:
+publish <COMMAND> <server> [OPTIONS]"
+
+Possible commands:
+    ls      Show the solution repository (XML)
+    help    Show this usage doc
+    file    publish a file
+    browse  browse the server interactively
+
+OPTIONS
+      publish file <servers...> [path] <files...>
+          if the path is not specified, an interactive server-browser will be used
+      publish browse <server>
+helpdoc
+end
+
 # Takes a mapping file 'local file name' => 'server file name'
 # And asks the user for any edits they'd like to make: report title, output-type, server-file-name, etc.
 def ask_edits(file_hash)
@@ -366,7 +433,7 @@ def ask_edits(file_hash)
 
     puts 'Which file would you like to edit?'
     puts 'Select it by the index. Choosing an index of 0 will indicate that you are done editing.'
-    filenum = STDIN.gets.chomp
+    filenum = get_stdin()
     if filenum =~ /^\d+$/
       filenum = filenum.to_i
     else
@@ -391,7 +458,7 @@ def ask_edits(file_hash)
         puts "3: Output-Type : #{file_table[filenum][4]}"
         puts "4: Output-Lock : #{file_table[filenum][5]}"
         puts "5: Remove File"
-        edit_choice = STDIN.gets.chomp
+        edit_choice = get_stdin()
         if edit_choice =~ /^\d+$/
           edit_choice = edit_choice.to_i
           if edit_choice == 0
@@ -401,7 +468,7 @@ def ask_edits(file_hash)
             file_table.pop!(filenum)
           else
             puts 'New value?'
-            nval = STDIN.gets.chomp
+            nval = get_stdin()
             if edit_choice == 1
               # Change the file hash's value, using the key from the file_table, so that next outer-loop will refresh the table, and capture the new value
               file_hash[file_table[filenum][1]] = nval
@@ -437,21 +504,6 @@ def ask_edits(file_hash)
   return file_hash
 end
 
-# Returns a list of length=2 (used like a tuple) containing the username and password
-def get_username()
-    print "Username for pentaho?"
-    username = ''
-    username = STDIN.gets.chomp
-    return username
-end
-
-def get_password(prompt='Password:')
-    print prompt
-    password = STDIN.noecho(&:gets).chomp
-    puts ''
-    return password
-end
-
 def handle_publish(commands)
   cmd = commands.shift
 
@@ -460,13 +512,20 @@ def handle_publish(commands)
     pconn = PentahoConnection.new(get_username(), get_password(), server)
     puts pconn.get_repo_hash
   elsif cmd == 'browse'
+    if commands.length < 1
+      print_help()
+      exit(-1)
+    end
     server = commands.shift
     pconn = PentahoConnection.new(get_username(), get_password(), server)
     path = pconn.browse_server_for_path
     puts "Chosen path: #{path}"
   elsif cmd == 'file'
-    username = get_username()
-    password = get_password()
+    if commands.length < 2
+      print_help()
+      exit(-1)
+    end
+
     serverlist = []
 
     # Capture all the next arguments that begin with 'http://'
@@ -474,12 +533,19 @@ def handle_publish(commands)
     #puts "Server list is #{serverlist}"
     loop do
       if commands[0].start_with?('http://')
+        if not commands[0].end_with?(':8080/pentaho')
+          puts "Warning: the server #{commands[0]} does not access port 8080 with the base-action of pentaho. You should be sure this is what's wanted."
+        end
         serverlist << commands.shift
       else
         break
       end
     end
     #puts "Server list is #{serverlist}"
+    if serverlist.empty?
+      puts "Servers must start with 'http://'. Please check the arguments passed in. At least one server is needed."
+      exit(-1)
+    end
 
     path = commands.shift
     if path[0] != '/'
@@ -493,7 +559,17 @@ def handle_publish(commands)
     # Default server-names to the name of the file
     files_hash = {}
     files.each do |f|
-      files_hash[f] = f
+      if FileTest.exist? f
+        files_hash[f] = f
+      else
+        puts "Warning: #{f} does not exist"
+      end
+    end
+
+    # Check that we have some files that exist to publish
+    if files_hash.empty?
+      puts "At least one existing file is needed when publishing. Otherwise, what's supposed to be published?"
+      exit(-1)
     end
 
 
@@ -510,6 +586,9 @@ def handle_publish(commands)
 
     # Check if this path starts with /  If not, we'll have to assume it's a report file or xaction, and resort to using the server browser
 
+    # Fetch username and password just before the connection is needed
+    username = get_username()
+    password = get_password()
     # Iterate over all the servers, and publish to each
     serverlist.each do |server|
       pconn = PentahoConnection.new(username, password, server)
@@ -546,7 +625,8 @@ def handle_publish(commands)
         puts meaningful_response
       else
         puts "Publish failed for some unknown reason. Would you like to see the response from the BI-server? (y/n)"
-        want_to_see = STDIN.gets.chomp.downcase
+        want_to_see = get_stdin().downcase
+
         if want_to_see == 'y'
           puts publish_response
         end
@@ -558,21 +638,7 @@ def handle_publish(commands)
 
 
   else
-    puts <<-helpdoc
-Usage:
-publish <COMMAND> <server> [OPTIONS]"
-
-Possible commands:
-    ls      Show the solution repository (XML)
-    help    Show this usage doc
-    file    publish a file
-    browse  browse the server interactively
-
-OPTIONS
-      publish file <servers...> [path] <files...>
-          if the path is not specified, an interactive server-browser will be used
-      publish browse [server]
-helpdoc
+    print_help
 
   end
 end
