@@ -5,27 +5,27 @@ require 'rexml/document'
 
 ### Library-accessibility Functions ###
 
-def get_title(prptfile)           return get_meta('dc:title') end
+def get_title(prptfile)           return get_meta('dc:title', prptfile) end
 def set_title(prptfile, newtitle) return set_meta('dc:title', newtitle, prptfile) end
 
 
-def get_desc(prptfile)          return get_meta('dc:description') end
+def get_desc(prptfile)          return get_meta('dc:description', prptfile) end
 def set_desc(prptfile, newval)  return set_meta('dc:description', newval, prptfile) end
 
 
-def get_creator(prptfile)         return get_meta('dc:creator') end
+def get_creator(prptfile)         return get_meta('dc:creator', prptfile) end
 def set_creator(prptfile, newval) return set_meta('dc:creator', newval, prptfile) end
 
-def get_subject(prptfile)         return get_meta('dc:subject') end
+def get_subject(prptfile)         return get_meta('dc:subject', prptfile) end
 def set_subject(prptfile, newval) return set_meta('dc:subject', newval, prptfile) end
 
 
-def get_output_type(prptfile)       return get_layout_attribute(prptfile, 'core:preferred-output-type') end
-def set_output_type(prptfile, type) return set_layout_attribute('core:preferred-output-type', type, prptfile) end
+def get_output_type(prptfile)       return get_layout('core:preferred-output-type', prptfile) end
+def set_output_type(prptfile, type) return set_layout('core:preferred-output-type', type, prptfile) end
 
 
-def get_output_lock(prptfile)       return get_layout_attribute(prptfile, 'core:lock-preferred-output-type') end
-def set_output_lock(prptfile, lock) return set_layout_attribute("core:lock-preferred-output-type", lock, prptfile) end
+def get_output_lock(prptfile)       return get_layout('core:lock-preferred-output-type', prptfile) end
+def set_output_lock(prptfile, lock) return set_layout("core:lock-preferred-output-type", lock, prptfile) end
 
 
 ### Core-functionality ###
@@ -35,6 +35,7 @@ def set_output_lock(prptfile, lock) return set_layout_attribute("core:lock-prefe
 def get_meta(property, prptfile)
   meta_doc = get_file_doc(prptfile, "meta.xml")
   property_elem = meta_doc.elements['office:document-meta'].elements['office:meta'].elements[property]
+
   if not property_elem.nil?
     return property_elem.text
   else
@@ -48,12 +49,16 @@ def set_meta(property, newvalue, prptfile)
   currentval = get_meta(property, prptfile)
 
   meta_doc = get_file_doc(prptfile, "meta.xml")
-  property_elem = meta_doc.elements['office:document-meta'].elements['office:meta'].elements[property]
 
+  property_elem = meta_doc.elements['office:document-meta'].elements['office:meta'].elements[property]
   if not property_elem.nil?
     property_elem.text = newvalue
-    write_file_doc(prptfile, "meta.xml", meta_doc)
+  else
+    property_eleme = newvalue
   end
+
+  write_file_doc(prptfile, "meta.xml", meta_doc)
+
   return "Changed '#{currentval}' to '#{newvalue}'"
 end
 
@@ -62,20 +67,20 @@ def get_layout(property, prptfile)
   meta_doc = get_file_doc(prptfile, "layout.xml")
   property_val = meta_doc.elements["layout"].attributes[property]
 
-  return property_val
+  if not property_val.nil?
+    return property_val
+  else
+    return ""
+  end
 end
 
 # Set a property in the layout file of a report
 def set_layout(property, newvalue, prptfile)
-  currentval = get_meta(property, prptfile)
+  currentval = get_layout(property, prptfile)
 
   meta_doc = get_file_doc(prptfile, "layout.xml")
-  property_val = meta_doc.elements["layout"].attributes[property]
-
-  if not property_elem.nil?
-    property_val = newvalue
-    write_file_doc(prptfile, "layout.xml", meta_doc)
-  end
+  meta_doc.elements["layout"].attributes[property] = newvalue
+  write_file_doc(prptfile, "layout.xml", meta_doc)
 
   return "Changed '#{currentval}' to '#{newvalue}'"
 end
