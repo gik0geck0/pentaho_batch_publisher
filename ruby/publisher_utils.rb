@@ -60,9 +60,9 @@ class PentahoConnection
       #openfile.close
     #end
     path = CGI::escape(path)
-    action_url = "/RepositoryFilePublisher?publishpath=#{path}&publishkey=#{get_passkey(pubpass)}&overwrite=#{overwrite}&mkdirs=#{mkdirs}"
+    action_url = "/RepositoryFilePublisher?publishPath=#{path}&publishKey=#{get_passkey(pubpass)}&overwrite=#{overwrite}&mkdirs=#{mkdirs}"
 
-    #puts "Action url:", action_url
+    puts "Action url:", action_url
     return post action_url, files
   end
 
@@ -323,6 +323,7 @@ class PentahoConnection
 
   def post(action, params, server=@server, auth=@auth)
     query = params
+    puts "Query params are: #{query}"
     return HTTMultiParty.post(server+action, query: query, basic_auth: auth, base_uri: server)
   end
 
@@ -601,7 +602,7 @@ def handle_publish(commands)
 
       pubpass = get_password("Publishing Password:")
       # Chomp the end. There's likely newlines
-      publish_response = pconn.publish_report(files_hash, path, pubpass).chomp
+      publish_response = pconn.publish_report(binary_hash, path, pubpass).chomp
       puts 'Finished the publish command'
 
 =begin
