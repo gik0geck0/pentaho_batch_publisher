@@ -1,9 +1,17 @@
-pentaho_batch_publisher
+Pentaho Batch Publisher
 =======================
 
 Ruby program that can interface with a pentaho bi-server, and can batch-publish reports to one or more servers
 
-Usage:
+Building the Gem:
+    * cd ruby
+    * make
+    * make install
+    Now, you can use require 'pentaho_publisher/publish_utils' in your own ruby program
+    or, use the packaged binary (pentaho-publisher), which will be deployed in your
+    gem/bin directory
+
+Usage (straight from source):
     The main executable is ruby/publish.rb
     Use it to access all the functionality.
 
