@@ -8,5 +8,5 @@ Gem::Specification.new do |s|
   s.email       = 'gik0geck0@gmail.com'
   s.license     = 'MIT'
   s.files       = ['lib/pentaho_publisher/publisher_utils', 'lib/pentaho_publisher/prpt_utils']
-  #s.executables << 'pentaho-publish'
+  s.executables << 'pentaho-publish'
 end
