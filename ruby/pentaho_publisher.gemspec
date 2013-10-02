@@ -7,6 +7,6 @@ Gem::Specification.new do |s|
   s.authors     = ['Matt Buland']
   s.email       = 'gik0geck0@gmail.com'
   s.license     = 'MIT'
-  s.files       = ['lib/pentaho_publisher/publisher_utils', 'lib/pentaho_publisher/prpt_utils']
+  s.files       = ['lib/pentaho_publisher/publisher_utils.rb', 'lib/pentaho_publisher/prpt_utils.rb']
   s.executables << 'pentaho-publish'
 end
