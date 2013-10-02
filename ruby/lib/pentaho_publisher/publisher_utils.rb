@@ -619,7 +619,7 @@ def handle_publish(commands)
         '4' => "Error: Invalid Publishing Password.",
         '5' => "Error: Invalid user credentials."
       }
-      puts "Response was: #{publish_response}. What is lookup 2? #{response_meanings['2']}"
+      #puts "Response was: #{publish_response}. What is lookup 2? #{response_meanings['2']}"
       meaningful_response = response_meanings[publish_response]
       if not meaningful_response.nil?
         puts meaningful_response
