@@ -4,4 +4,6 @@ gem 'httparty'
 gem 'httmultiparty'
 gem 'terminal-table'
 gem 'zip'
-gem 'rexml'
+
+# Comes native with ruby >1.8
+#gem 'rexml'
