@@ -322,7 +322,13 @@ class PentahoConnection
   end
 
   def post(action, params, server=@server, auth=@auth)
-    query = params
+    # This clone is NECESSARY to support using the set of original files
+    # multiple times (publishing to successive servers). HTTMultiParty will
+    # use the query hash, and change the file-objects into IO-Objects (internal type).
+    # Calling HTTMultiParty successive times on the same set of files (name->FILE)
+    # will cause the IO-conversion to happen again, which totally screws up the
+    # files. So. Clone is necesary.
+    query = params.clone
     puts "Query params are: #{query}"
     return HTTMultiParty.post(server+action, query: query, basic_auth: auth, base_uri: server)
   end
@@ -560,7 +566,7 @@ def handle_publish(commands)
     files_hash = {}
     files.each do |f|
       if FileTest.exist? f
-        files_hash[f] = f
+        files_hash[f] = File.basename(f)
       else
         puts "Warning: #{f} does not exist"
       end
@@ -577,12 +583,6 @@ def handle_publish(commands)
     # Afterwards, the publishing commences
     files_hash = ask_edits(files_hash)
 
-    # Create the file->binary hash
-    binary_hash = {}
-    files_hash.each do |localfname, remotefname|
-      openfile = File.new localfname, 'rb'
-      binary_hash[URI.encode(remotefname)] = openfile
-    end
 
     # Check if this path starts with /  If not, we'll have to assume it's a report file or xaction, and resort to using the server browser
 
@@ -599,10 +599,16 @@ def handle_publish(commands)
       end
       puts "Publishing to server: #{server}, path: #{path}, file-list: #{files}"
 
+      # Create the file->binary hash
+      binary_hash = {}
+      files_hash.each do |localfname, remotefname|
+        openfile = File.new localfname, 'rb'
+        binary_hash[URI.encode(remotefname)] = openfile
+      end
 
       pubpass = get_password("Publishing Password:")
       # Chomp the end. There's likely newlines
-      publish_response = pconn.publish_report(binary_hash, path, pubpass).chomp
+      publish_response = pconn.publish_report(binary_hash.clone, path, pubpass).chomp
       puts 'Finished the publish command'
 
 =begin
