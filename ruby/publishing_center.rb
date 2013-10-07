@@ -23,7 +23,8 @@ def create_main_window()
   clearFiles = Tk::Tile::Button.new(content) {text "Clear Files"}
   serverlbl = Tk::Tile::Label.new(content) {text "Destination Server"}
   pathlbl = Tk::Tile::Label.new(content) {text "Destination Path"}
-  destServer = Tk::Tile::Entry.new(content)
+  $servertext = ''
+  destServer = Tk::Tile::Entry.new(content) { textvariable $servertext; }
   destPath = Tk::Tile::Entry.new(content)
   browse = Tk::Tile::Button.new(content) {text "Browse"}
   cancel = Tk::Tile::Button.new(content) {text "Cancel"}
@@ -46,35 +47,90 @@ def create_main_window()
   publish.grid :column => 3, :row => 5
 
   # Make the root scalable. This allows the content-frame to scale.
-  TkGrid.columnconfigure( root, 0, :weight => 1 )
-  TkGrid.rowconfigure( root, 0, :weight => 1 )
-  # Make a scaling unit in the center. This makes everything finite-size EXCEPT the things in col1 or ro1, which are expandable.
-  TkGrid.columnconfigure( content, 1, :weight => 1 )
-  TkGrid.rowconfigure( content, 1, :weight => 1)
+  TkGrid.columnconfigure( root, 0, :weight => 1 , :minsize => 400)
+  TkGrid.rowconfigure( root, 0, :weight => 1, :minsize => 400)
+  # Make a scaling unit in the center. This makes everything finite-size EXCEPT the things in col1 or row1, which are expandable.
+  TkGrid.columnconfigure( content, 1, :weight => 1, :minsize => 400 )
+  TkGrid.rowconfigure( content, 1, :weight => 1, :minsize => 400)
 
   # Event Binding
-  browse.bind("1") { create_server_browser root }
+  browse.bind("1") { puts "$servertext is #{$servertext}"; create_server_browser(root, getServerlist($servertext)) }
   cancel.bind("1") { exit(0) }
   addFile.bind("1") do
-    fname = Tk::getOpenFile
+    fname = Tk::getOpenFile(:multiple => true, :parent => content)
     puts "Adding this file: #{fname}"
   end
 
   Tk.mainloop
 end
 
-def create_server_browser(parent)
+def getServerlist(serverText)
+  puts "Looking at the servers: #{serverText}"
+  return []
+end
+
+def create_server_browser(parent, serverlist)
+
+  # Have the user login first
+  pconn = get_login(parent, serverlist)
+  if pconn.nil?
+    # There must not be a server entered. Don't create this window.
+    return
+  end
+
   browser_window = TkToplevel.new(parent)
   browser_window['geometry'] = '400x400+100+100'
-  content = Tk::Tile::Frame.new(browser_window) { padding "3 3 12 12" }
-  namelbl = Tk::Tile::Label.new(content) { text "Browsing the server for files!" }
+  #browser_window.minsize(:height => 200, :width => 200)
 
-  content.grid :column => 0, :row => 0, :sticky => 'nw', :padx => 5
-  namelbl.grid :column => 0, :row => 0, :sticky => 'nw', :padx => 5
+  content = Tk::Tile::Frame.new(browser_window) { padding "3 3 12 12"; pack :side => 'top', 'fill' => "both", 'expand' => 'yes'; }
+  #testlbl = Tk::Tile::Label.new(browser_window) { text "HEY LOOK AT ME, IM TAKING UP SPACE" }
+
+  namelbl = Tk::Tile::Label.new(content) { text "Browsing the server for files!"; pack :side => 'top', :fill => 'x' }
+  files_frame = Tk::Tile::Frame.new(content) { borderwidth 5; relief "sunken"; pack :side => 'top', 'fill' => "both", 'expand' => 'yes'; }
+
+  control_frame = Tk::Tile::Frame.new(content) { padding "3 3 12 12"; pack :side => 'top', :fill => 'x'}
+  pathlbl = Tk::Tile::Label.new(control_frame) { text "Path:"; pack :side => 'left'}
+  pathname = Tk::Tile::Entry.new(control_frame) { text "/"; pack :side => 'left'}
+  cancel = Tk::Tile::Button.new(control_frame) {text "Cancel"; pack :side => 'left'}
+  choose = Tk::Tile::Button.new(control_frame) {text "Choose"; pack :side => 'left'}
+
+  #content.grid :column => 0, :row => 0, :padx => 5
+  #testlbl.grid :column => 0, :row => 1
+
+  #namelbl.grid :column => 0, :row => 0, :padx => 5
+  #files_frame.grid :column => 0, :row => 1, :padx => 5
+  #control_frame.grid :column => 0, :row => 2
+
+  #pathlbl.grid :column => 0, :row => 0
+  #pathname.grid :column => 1, :row => 0
+  #cancel.grid :column => 2, :row => 0
+  #choose.grid :column => 3, :row => 0
 
   # Make the window scalable. This allows the content-frame to scale.
-  TkGrid.columnconfigure( browser_window, 0, :weight => 1 )
-  TkGrid.rowconfigure( browser_window, 0, :weight => 1 )
+  #TkGrid.columnconfigure( browser_window, 0, :weight => 1, :minsize => 200 )
+  #TkGrid.rowconfigure( browser_window, 0, :weight => 1, :minsize => 200 )
+
+  #TkGrid.columnconfigure(content, 0, :weight => 1, :minsize => 200)
+  #TkGrid.rowconfigure(content, 0, :weight => 1, :minsize => 200)
+end
+
+def get_login(parent, serverlist)
+  if serverlist.empty?
+    msg = Tk.messageBox({ :message => 'Please entry at least one server first.', :title => 'Server Required', :type => "ok", :icon => "error" })
+    return nil
+  end
+  browser_window = TkToplevel.new(parent)
+  #browser_window['geometry'] = '400x400+100+100'
+  #browser_window.minsize(:height => 200, :width => 200)
+
+  content = Tk::Tile::Frame.new(browser_window) { padding "3 3 12 12"; pack :side => 'top', 'fill' => "both", 'expand' => 'yes'; }
+  #testlbl = Tk::Tile::Label.new(browser_window) { text "HEY LOOK AT ME, IM TAKING UP SPACE" }
+
+  namelbl = Tk::Tile::Label.new(content) { text "Username:"; }
+  nameentry = Tk::Tile::Label.new(content) { }
+
+  pwlbl = Tk::Tile::Label.new(content) { text "Password"; }
+  pwentry = Tk::Tile::Label.new(content) { }
 end
 
 create_main_window()
