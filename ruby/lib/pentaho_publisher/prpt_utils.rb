@@ -156,6 +156,35 @@ def extract_sql(prptfile)
   end
 end
 
+# Searches through the XML files in a bunch of prpts, looking for a regex
+def xml_search(regex, *prpts)
+  #puts "The regex is #{regex}"
+  #puts "A random regex is #{Regexp.new(/helloworld/)}"
+  prpts.each do |prptfile|
+    Zip::ZipFile.open(prptfile, Zip::ZipFile::CREATE) do |zipfile|
+      zipfile.each do |file|
+        if file.name.to_s.end_with? '.xml'
+          #if file.name.include? 'sql-ds.xml'
+            #puts "Lines from #{file.name}:"
+            #zipfile.read(file).lines.map { |l| puts l }
+          #end
+          hits = zipfile.read(file).lines.map.with_index(1).inject([]) do |m, line|
+            #puts "Looking at line \# #{line[1]}: #{line[0]}"
+            if line[0] =~ regex
+              m << line
+            end
+            m
+          end
+          if not hits.empty?
+            puts "In Report #{prptfile} :: #{file.name}, found:"
+            hits.map { |h| puts "#{h[1]}: #{h[0]}" }
+          end
+        end
+      end
+    end
+  end
+end
+
 
 ### Main and Output ###
 
@@ -217,7 +246,14 @@ def handle_prpt(commands)
   else
     # Fallback for when the command is not in the property map. Most likely, we have no idea what the user wants.
 
-    puts <<-helpdoc
+    if command == 'xml-search'
+      # the target variable contains the 1-line string we're looking for, and the remaining args is a list of reports
+      re = Regexp.new target
+
+      # XML Search will output its own stuff.
+      xml_search(re, *commands)
+    else
+      puts <<-helpdoc
 
 prpt <COMMAND> [OPTIONS]
 
@@ -227,10 +263,12 @@ COMMANDS:
     extract-sql     extract all the queries from a report into the current directory
     get             Show a property of one or more reports
     set             Set a property of one or more report
+    xml-search      Search for a string in all the xml files inside a report
 
 OPTIONS
     set   <property> <newvalue> <reports...>
     get   <property> <reports...>
+    xml-search <search-string> <reports...>
 
 Report Properties
     title           Title of the Report
@@ -243,6 +281,7 @@ Report Properties
 
     helpdoc
 
-    list_output()
+      list_output()
+    end
   end
 end
