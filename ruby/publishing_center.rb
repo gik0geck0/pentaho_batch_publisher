@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 
 #require_relative 'publish.rb'
-#require 'pentaho_publisher/publishing_utils'
+require 'pentaho_publisher/publisher_utils'
 #require 'pentaho_publisher/prpt_utils'
 require 'tk'
 
@@ -23,7 +23,7 @@ def create_main_window()
   clearFiles = Tk::Tile::Button.new(content) {text "Clear Files"}
   serverlbl = Tk::Tile::Label.new(content) {text "Destination Server"}
   pathlbl = Tk::Tile::Label.new(content) {text "Destination Path"}
-  $servertext = ''
+  $servertext = TkVariable.new
   destServer = Tk::Tile::Entry.new(content) { textvariable $servertext; }
   destPath = Tk::Tile::Entry.new(content)
   browse = Tk::Tile::Button.new(content) {text "Browse"}
@@ -54,25 +54,27 @@ def create_main_window()
   TkGrid.rowconfigure( content, 1, :weight => 1, :minsize => 400)
 
   # Event Binding
-  browse.bind("1") { puts "$servertext is #{$servertext}"; create_server_browser(root, getServerlist($servertext)) }
+  browse.bind("1") { create_server_browser(root, getServerlist($servertext)) }
   cancel.bind("1") { exit(0) }
   addFile.bind("1") do
     fname = Tk::getOpenFile(:multiple => true, :parent => content)
-    puts "Adding this file: #{fname}"
+    puts "Adding these files: #{fname}"
   end
 
   Tk.mainloop
 end
 
 def getServerlist(serverText)
-  puts "Looking at the servers: #{serverText}"
-  return []
+  #puts "Looking at the servers: #{serverText}"
+  return serverText.to_s.split
+  #return []
 end
 
 def create_server_browser(parent, serverlist)
 
   # Have the user login first
   pconn = get_login(parent, serverlist)
+  puts "Get-login returned with #{pconn}"
   if pconn.nil?
     # There must not be a server entered. Don't create this window.
     return
@@ -126,12 +128,34 @@ def get_login(parent, serverlist)
   content = Tk::Tile::Frame.new(browser_window) { padding "3 3 12 12"; pack :side => 'top', 'fill' => "both", 'expand' => 'yes'; }
   #testlbl = Tk::Tile::Label.new(browser_window) { text "HEY LOOK AT ME, IM TAKING UP SPACE" }
 
-  namelbl = Tk::Tile::Label.new(content) { text "Username:"; }
-  nameentry = Tk::Tile::Label.new(content) { }
+  $unvar = TkVariable.new
+  namelbl = Tk::Tile::Label.new(content) { text "Username:"; pack :anchor => 'nw' }
+  nameentry = Tk::Tile::Entry.new(content) { textvariable $unvar; pack :anchor => 'n' }
 
-  pwlbl = Tk::Tile::Label.new(content) { text "Password"; }
-  pwentry = Tk::Tile::Label.new(content) { }
+  $pwvar = TkVariable.new
+  pwlbl = Tk::Tile::Label.new(content) { text "Password"; pack :anchor => 'sw' }
+  pwentry = Tk::Tile::Entry.new(content) { show '**********'; textvariable $pwvar; pack :anchor => 's' }
+
+  login = Tk::Tile::Button.new(content) { text "Login"; pack :anchor => 'se' }
+  cancel = Tk::Tile::Button.new(content) { text "Cancel"; pack :anchor => 'se' }
+
+  login.bind("1") { browser_window.destroy }
+  cancel.bind("1") { $unvar = ''; $pwvar = ''; browser_window.destroy }
+
+  # Let's pause here, so the user can put in their login info, and after, we can return it
+  browser_window.wait_window
+
+  # Allow no-passwords (though I don't know if pentaho does)
+  if $unvar == ''
+    return nil
+  end
+
+  # Create a new connection to the first server in the list
+  return PentahoConnection.new $unvar.to_s, $pwvar.to_s, serverlist[0]
 end
+
+puts "Tk.instance_methods: #{Tk.instance_methods}"
+puts "Tk.constants: #{Tk.constants}"
 
 create_main_window()
 
