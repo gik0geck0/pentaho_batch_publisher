@@ -16,7 +16,7 @@ Usage (straight from source):
     Use it to access all the functionality.
 
     Command Usage:
-    ./ruby/publish.rb <module> [module options...]
+    pentaho-publish <module> [module options...]
 
     Available Modules:
       publish
