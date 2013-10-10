@@ -25,6 +25,7 @@ class PentahoConnection
   def get_repo_hash
     begin
     hash = get '/SolutionRepositoryService?component=getSolutionRepositoryDoc'
+    return hash
     rescue Errno::ECONNREFUSED
       puts 'Connection refused. Bad username/password combo?'
       exit(-1)
@@ -66,156 +67,196 @@ class PentahoConnection
     return post action_url, files
   end
 
-  # Starting at a certain node, recurse through the file-paths, and get an ending node
-  def node_recurse(startnode, name_steps)
-    if not startnode.nil? and not name_steps.empty?
-      #puts "Starting at #{startnode["name"]} and going through #{name_steps}"
-      next_dir = name_steps.shift
-      #puts "Next step is #{next_dir}"
-      next_node = startnode
-      startnode["file"].each do |child|
-        #puts "Comparing #{child['name']} to #{next_dir}"
-        if child["name"] == next_dir
-          #puts "Found the matching child"
-          next_node = child
-          break
+
+
+  # Maintains a state (current directory) inside a repository hash, and provides
+  # movement/traversal across the levels
+  class PathPosition
+    attr_reader :rootnode
+    attr_reader :pwdnode
+
+    def initialize(repo_hash)
+      @rootnode = repo_hash.parsed_response["repository"]
+      @rootnode["path"] = '/'
+      @rootnode["name"] = @rootnode["path"][1, @rootnode["path"].length]
+
+      @pwdnode = @rootnode
+    end
+
+    # Return the path of the specified target directory. The PWD will NOT be
+    # changed in this step.
+    def use(targetdir)
+      if @pwdnode["path"].nil?
+        puts "ERROR: The current directory has no path. We cannot find the targetdir's path"
+      else
+        if targetdir.nil?
+          puts "Cannot use a NIL directory"
+        else
+          #puts "Trying to use #{targetdir} from #{@pwdnode['path']}"
+          if targetdir =~ /^\d+$/
+            #puts "Tgtdir was an integer: #{targetdir}"
+            if targetdir.to_i > 0
+              targetdir = get_pwd_hash(@pwdnode, true)[targetdir.to_i]
+              if targetdir.nil?
+                puts "Sorry, but that folder is outside the range."
+                return nil
+              end
+            else
+              # Choosing 0 means choose this directory
+              # I guess if a negative number is chosen, then we'll just assume use .
+              return @pwdnode["path"]
+            end
+            puts "Changed tgtdir to the real-name: #{targetdir}"
+          elsif targetdir == '.'
+            # use . == use PWD
+            return @pwdnode["path"]
+          end
+
+          filelist = @pwdnode["file"]
+          if not filelist.nil?
+            filelist.each do |f|
+              if f["name"] == targetdir
+                #puts "Verified, and using #{targetdir}"
+                if f["path"].nil?
+                  # If the desired directory doesn't yet have a path, define it as the previous directory's path + the next directory's name
+                  f["path"] = @pwdnode["path"] + '/' + f["name"]
+                end
+                return f["path"]
+              end
+            end
+          end
         end
       end
-      if next_node != startnode
-        # Good. That means we found the next child.
-        #puts "Found #{next_dir}. Recursing for #{name_steps}"
-        return node_recurse(next_node, name_steps)
+    end
+
+    # MAY change the current directory. If the current directory did NOT change, nil will be returned.
+    # if the PWD did indeed change, the new PWD will be returned
+    def cd(*cmdargs)
+      if @rootnode.nil?
+        puts 'How the F is the rootnode nil? That should NOT happen'
+      end
+
+      if cmdargs.length > 0
+        dirnum = cmdargs.shift
+        if /^\d+$/ =~ dirnum
+          #puts "Tgtdir was an integer: #{dirnum}"
+          pwd_hash = get_pwd_hash(@pwdnode, true)
+          #puts "Full PwdHash is #{pwd_hash}"
+          tgtdir = pwd_hash[dirnum.to_i]
+          if tgtdir.nil?
+            puts "Index out of range. Expected < #{pwd_hash.length}, but got #{dirnum.to_i}"
+            return nil
+          end
+          puts "Changed tgtdir to the real-name: #{tgtdir}"
+        else
+          tgtdir = dirnum
+        end
+
+        if @pwdnode["path"].nil?
+          puts 'The current directory has no path! Ah!'
+        end
+
+        chdir = nil
+        if tgtdir == '..'
+          #puts "CDing ..  #{@pwdnode['path'].nil?}"
+          if not @pwdnode["path"].nil?
+            # We need the pwdnode's path not to be null, since we're going to use it to determine the previous directory
+            pathSplit = @pwdnode["path"].split('/')
+            if pathSplit[0].empty?
+              pathSplit.shift
+            end
+            # Skip the root-node's name
+            pathSplit.shift
+            #puts "Path split for .. was #{pathSplit}"
+            if pathSplit.length >= 1
+              chdir = node_recurse @rootnode, (pathSplit.first pathSplit.length-1)
+              #puts "Chdir is now #{chdir}"
+            else
+              # If the pathSplit without the root-name has no length, then we're trying to do /.. (cd .. from root)
+              # Do nothing.
+            end
+          end
+        else
+          filelist = @pwdnode["file"]
+          if not filelist.nil?
+            filelist.each do |f|
+              if f["name"] == tgtdir
+                #puts "CDing to #{tgtdir}"
+                if f["path"].nil?
+                  # If the desired directory doesn't yet have a path, define it as the previous directory's path + the next directory's name
+                  f["path"] = @pwdnode["path"] + '/' + f["name"]
+                end
+                chdir = f
+                #@pwdnode = f
+                #return @pwdnode
+              end
+            end
+          end
+        end
+
+        if chdir.nil?
+          puts "Invalid directory: #{tgtdir}"
+          return nil
+        else
+          @pwdnode = chdir
+          return @pwdnode
+        end
+      end
+
+    end
+
+    # Starting at a certain node, recurse through the file-paths, and get an ending node
+    def node_recurse(startnode, name_steps)
+      if not startnode.nil? and not name_steps.empty?
+        #puts "Starting at #{startnode["name"]} and going through #{name_steps}"
+        next_dir = name_steps.shift
+        #puts "Next step is #{next_dir}"
+        next_node = startnode
+        startnode["file"].each do |child|
+          #puts "Comparing #{child['name']} to #{next_dir}"
+          if child["name"] == next_dir
+            #puts "Found the matching child"
+            next_node = child
+            break
+          end
+        end
+        if next_node != startnode
+          # Good. That means we found the next child.
+          #puts "Found #{next_dir}. Recursing for #{name_steps}"
+          return node_recurse(next_node, name_steps)
+        else
+          # Uh. Oh. The next child was not found in the startnode's file list. This must indicate a bad path
+          puts "ERROR: At startnode #{startnode["name"]}, could not find the next child of #{next_dir}. Remaining paths: #{name_steps}"
+          return startnode
+        end
       else
-        # Uh. Oh. The next child was not found in the startnode's file list. This must indicate a bad path
-        puts "ERROR: At startnode #{startnode["name"]}, could not find the next child of #{next_dir}. Remaining paths: #{name_steps}"
+        if startnode.nil?
+          puts "Why? The startnode is Nil!"
+        end
         return startnode
       end
-    else
-      if startnode.nil?
-        puts "Why? The startnode is Nil!"
+    end
+
+    # Make a mapping from index to file/folder name, and return that map
+    def get_pwd_hash(pwdnode, dir_only=false)
+      pwd_hash = {}
+      index = 1
+      pwdnode["file"].each do |filefolder|
+        if !dir_only or filefolder["isDirectory"] == 'true'
+          pwd_hash[index] = filefolder["name"]
+          index += 1
+        end
       end
-      return startnode
+      return pwd_hash
     end
   end
 
-  def cd(rootnode, pwdnode, *cmdargs)
-    if rootnode.nil?
-      puts 'How the F is the rootnode nil? That should NOT happen'
-    end
-
-    if cmdargs.length > 0
-      dirnum = cmdargs.shift
-      if /^\d+$/ =~ dirnum
-        #puts "Tgtdir was an integer: #{dirnum}"
-        pwd_hash = get_pwd_hash(pwdnode, true)
-        #puts "Full PwdHash is #{pwd_hash}"
-        tgtdir = pwd_hash[dirnum.to_i]
-        if tgtdir.nil?
-          puts "Index out of range. Expected < #{pwd_hash.length}, but got #{dirnum.to_i}"
-          return nil
-        end
-        puts "Changed tgtdir to the real-name: #{tgtdir}"
-      else
-        tgtdir = dirnum
-      end
-
-      if pwdnode["path"].nil?
-        puts 'The current directory has no path! Ah!'
-      end
-
-      chdir = nil
-      if tgtdir == '..'
-        #puts "CDing ..  #{pwdnode['path'].nil?}"
-        if not pwdnode["path"].nil?
-          # We need the pwdnode's path not to be null, since we're going to use it to determine the previous directory
-          pathSplit = pwdnode["path"].split('/')
-          if pathSplit[0].empty?
-            pathSplit.shift
-          end
-          # Skip the root-node's name
-          pathSplit.shift
-          #puts "Path split for .. was #{pathSplit}"
-          if pathSplit.length >= 1
-            chdir = node_recurse rootnode, (pathSplit.first pathSplit.length-1)
-            #puts "Chdir is now #{chdir}"
-          else
-            # If the pathSplit without the root-name has no length, then we're trying to do /.. (cd .. from root)
-            # Do nothing.
-          end
-        end
-      else
-        filelist = pwdnode["file"]
-        if not filelist.nil?
-          filelist.each do |f|
-            if f["name"] == tgtdir
-              #puts "CDing to #{tgtdir}"
-              if f["path"].nil?
-                # If the desired directory doesn't yet have a path, define it as the previous directory's path + the next directory's name
-                f["path"] = pwdnode["path"] + '/' + f["name"]
-              end
-              return f
-            end
-          end
-        end
-      end
-
-      if chdir.nil?
-        puts "Invalid directory: #{tgtdir}"
-        return nil
-      else
-        return chdir
-      end
-    end
-  end
-
-  # Return the path of the specified target directory
-  def use(rootnode, pwdnode, targetdir)
-    if pwdnode["path"].nil?
-      puts "ERROR: The current directory has no path. We cannot find the targetdir's path"
-    else
-      if targetdir.nil?
-        puts "Cannot use a NIL directory"
-      else
-        #puts "Trying to use #{targetdir} from #{pwdnode['path']}"
-        if targetdir =~ /^\d+$/
-          #puts "Tgtdir was an integer: #{targetdir}"
-          if targetdir.to_i > 0
-            targetdir = get_pwd_hash(pwdnode, true)[targetdir.to_i]
-            if targetdir.nil?
-              puts "Sorry, but that folder is outside the range."
-              return nil
-            end
-          else
-            # Choosing 0 means choose this directory
-            # I guess if a negative number is chosen, then we'll just assume use .
-            return pwdnode["path"]
-          end
-          puts "Changed tgtdir to the real-name: #{targetdir}"
-        elsif targetdir == '.'
-          # use . == use PWD
-          return pwdnode["path"]
-        end
-
-
-        filelist = pwdnode["file"]
-        if not filelist.nil?
-          filelist.each do |f|
-            if f["name"] == targetdir
-              #puts "Verified, and using #{targetdir}"
-              if f["path"].nil?
-                # If the desired directory doesn't yet have a path, define it as the previous directory's path + the next directory's name
-                f["path"] = pwdnode["path"] + '/' + f["name"]
-              end
-              return f["path"]
-            end
-          end
-        end
-      end
-    end
-  end
-
+  # Use CLI to get the path
   def browse_server_for_path
-    raw_hash = get_repo_hash
+    repo_pos = PathPosition.new(get_repo_hash)
+
+=begin
+  # Pre-PathPosition Object code
     # Initialize PWD to root
     rootnode = raw_hash.parsed_response["repository"]
     rootnode["path"] = '/'
@@ -223,6 +264,7 @@ class PentahoConnection
     # We set the rootnode's path to /
     #puts "Rootnode name is #{rootnode['name']} and path is #{rootnode['path']}"
     pwdnode = rootnode
+=end
 
     helpdoc = <<-HELPDOC
     Available commands:
@@ -236,7 +278,7 @@ class PentahoConnection
 
 
     loop do
-      if pwdnode.nil?
+      if repo_pos.pwdnode.nil?
         puts 'WTF bro? the PWD is nil!'
       end
       print '%> '
@@ -246,7 +288,7 @@ class PentahoConnection
       elsif command == 'exit'
         break
       elsif command == 'ls'
-        show_pwd(pwdnode)
+        show_pwd(repo_pos.pwdnode)
         #puts get_pwd(pwdnode)
       elsif command =='help'
         puts helpdoc
@@ -254,7 +296,7 @@ class PentahoConnection
         command_split = command.split(' ', 2)
         if command_split[0] == 'use'
           # The user is specifying the folder to deploy to. We want to stop the repl, and return that folder path
-          deploy_path = use(rootnode, pwdnode, command_split[1])
+          deploy_path = repo_pos.use(command_split[1])
           if deploy_path.nil?
             puts "Sorry, cannot use that directory"
           else
@@ -266,28 +308,16 @@ class PentahoConnection
         elsif command_split[0] == 'ls'
           # Remove the ls, so we can use its args
           com = command_split.shift
-          show_pwd(pwdnode, *command_split)
+
+          show_pwd(repo_pos.pwdnode, *command_split)
         else
-          maybe_newpwd = send(command_split.shift, rootnode, pwdnode, *command_split)
+          maybe_newpwd = repo_pos.send(command_split.shift, *command_split)
           if not maybe_newpwd.nil?
             pwdnode = maybe_newpwd
           end
         end
       end
     end
-  end
-
-  # Make a mapping from index to file/folder name, and return that map
-  def get_pwd_hash(pwdnode, dir_only=false)
-    pwd_hash = {}
-    index = 1
-    pwdnode["file"].each do |filefolder|
-      if !dir_only or filefolder["isDirectory"] == 'true'
-        pwd_hash[index] = filefolder["name"]
-        index += 1
-      end
-    end
-    return pwd_hash
   end
 
   def show_pwd(pwdnode, *args)
