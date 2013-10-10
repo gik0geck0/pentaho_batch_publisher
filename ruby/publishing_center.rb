@@ -54,7 +54,12 @@ def create_main_window()
   TkGrid.rowconfigure( content, 1, :weight => 1, :minsize => 400)
 
   # Event Binding
-  browse.bind("1") { create_server_browser(root, getServerlist($servertext)) }
+  browse.bind("1") do
+    serverList = getServerlist($servertext);
+    if not serverList.nil?
+      create_server_browser(root, serverList)
+    end
+  end
   cancel.bind("1") { exit(0) }
   addFile.bind("1") do
     fname = Tk::getOpenFile(:multiple => true, :parent => content)
@@ -64,16 +69,23 @@ def create_main_window()
   Tk.mainloop
 end
 
+# Converts the input on the server-text into a list of servers. Will create an error-box if there are any problems, and if there's a critical error, nil will be returned
 def getServerlist(serverText)
-  #puts "Looking at the servers: #{serverText}"
-  return serverText.to_s.split
-  #return []
+  slist = serverText.to_s.split
+  if slist.empty?
+    msg = Tk.messageBox({ :message => 'Please entry at least one server first.', :title => 'Server Required', :type => "ok", :icon => "error" })
+    return nil
+  return slist
 end
 
-def create_server_browser(parent, serverlist)
+# Creates a GUI-browser for a remote server to pick a path
+def create_server_browser(parent, server)
 
   # Have the user login first
-  pconn = get_login(parent, serverlist)
+    pconn = nil
+  else
+    pconn = get_login(parent, server)
+  end
   puts "Get-login returned with #{pconn}"
   if pconn.nil?
     # There must not be a server entered. Don't create this window.
@@ -96,6 +108,8 @@ def create_server_browser(parent, serverlist)
   cancel = Tk::Tile::Button.new(control_frame) {text "Cancel"; pack :side => 'left'}
   choose = Tk::Tile::Button.new(control_frame) {text "Choose"; pack :side => 'left'}
 
+  repo_hash = 
+
   #content.grid :column => 0, :row => 0, :padx => 5
   #testlbl.grid :column => 0, :row => 1
 
@@ -116,11 +130,7 @@ def create_server_browser(parent, serverlist)
   #TkGrid.rowconfigure(content, 0, :weight => 1, :minsize => 200)
 end
 
-def get_login(parent, serverlist)
-  if serverlist.empty?
-    msg = Tk.messageBox({ :message => 'Please entry at least one server first.', :title => 'Server Required', :type => "ok", :icon => "error" })
-    return nil
-  end
+def get_login(parent, server)
   browser_window = TkToplevel.new(parent)
   #browser_window['geometry'] = '400x400+100+100'
   #browser_window.minsize(:height => 200, :width => 200)
@@ -151,7 +161,7 @@ def get_login(parent, serverlist)
   end
 
   # Create a new connection to the first server in the list
-  return PentahoConnection.new $unvar.to_s, $pwvar.to_s, serverlist[0]
+  return PentahoConnection.new $unvar.to_s, $pwvar.to_s, server
 end
 
 puts "Tk.instance_methods: #{Tk.instance_methods}"
