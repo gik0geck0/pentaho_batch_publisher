@@ -96,7 +96,7 @@ class PentahoConnection
           if targetdir =~ /^\d+$/
             #puts "Tgtdir was an integer: #{targetdir}"
             if targetdir.to_i > 0
-              targetdir = get_pwd_hash(@pwdnode, true)[targetdir.to_i]
+              targetdir = get_pwd_hash(true)[targetdir.to_i]
               if targetdir.nil?
                 puts "Sorry, but that folder is outside the range."
                 return nil
@@ -140,7 +140,7 @@ class PentahoConnection
         dirnum = cmdargs.shift
         if /^\d+$/ =~ dirnum
           #puts "Tgtdir was an integer: #{dirnum}"
-          pwd_hash = get_pwd_hash(@pwdnode, true)
+          pwd_hash = get_pwd_hash(true)
           #puts "Full PwdHash is #{pwd_hash}"
           tgtdir = pwd_hash[dirnum.to_i]
           if tgtdir.nil?
@@ -238,10 +238,10 @@ class PentahoConnection
     end
 
     # Make a mapping from index to file/folder name, and return that map
-    def get_pwd_hash(pwdnode, dir_only=false)
+    def get_pwd_hash(dir_only=false)
       pwd_hash = {}
       index = 1
-      pwdnode["file"].each do |filefolder|
+      @pwdnode["file"].each do |filefolder|
         if !dir_only or filefolder["isDirectory"] == 'true'
           pwd_hash[index] = filefolder["name"]
           index += 1

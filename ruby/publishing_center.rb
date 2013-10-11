@@ -57,7 +57,7 @@ def create_main_window()
   browse.bind("1") do
     serverList = getServerlist($servertext);
     if not serverList.nil?
-      create_server_browser(root, serverList)
+      create_server_browser(root, serverList[0])
     end
   end
   cancel.bind("1") { exit(0) }
@@ -73,8 +73,9 @@ end
 def getServerlist(serverText)
   slist = serverText.to_s.split
   if slist.empty?
-    msg = Tk.messageBox({ :message => 'Please entry at least one server first.', :title => 'Server Required', :type => "ok", :icon => "error" })
-    return nil
+    #msg = Tk.messageBox({ :message => 'Please entry at least one server first.', :title => 'Server Required', :type => "ok", :icon => "error" })
+    return ["http://sapapentah001.recondo.vci:8080/pentaho"]
+  end
   return slist
 end
 
@@ -82,10 +83,12 @@ end
 def create_server_browser(parent, server)
 
   # Have the user login first
+  if server.nil?
     pconn = nil
   else
     pconn = get_login(parent, server)
   end
+
   puts "Get-login returned with #{pconn}"
   if pconn.nil?
     # There must not be a server entered. Don't create this window.
@@ -104,30 +107,43 @@ def create_server_browser(parent, server)
 
   control_frame = Tk::Tile::Frame.new(content) { padding "3 3 12 12"; pack :side => 'top', :fill => 'x'}
   pathlbl = Tk::Tile::Label.new(control_frame) { text "Path:"; pack :side => 'left'}
-  pathname = Tk::Tile::Entry.new(control_frame) { text "/"; pack :side => 'left'}
+  $pathname = TkVariable.new
+  pathname = Tk::Tile::Entry.new(control_frame) { text "/"; pack :side => 'left'; textvariable $pathname }
   cancel = Tk::Tile::Button.new(control_frame) {text "Cancel"; pack :side => 'left'}
   choose = Tk::Tile::Button.new(control_frame) {text "Choose"; pack :side => 'left'}
 
-  repo_hash = 
+  pathManager = PentahoConnection::PathPosition.new(pconn.get_repo_hash)
 
-  #content.grid :column => 0, :row => 0, :padx => 5
-  #testlbl.grid :column => 0, :row => 1
+  pathsetter = lambda do |path|
+    $pathname = path
+  end
 
-  #namelbl.grid :column => 0, :row => 0, :padx => 5
-  #files_frame.grid :column => 0, :row => 1, :padx => 5
-  #control_frame.grid :column => 0, :row => 2
+  populate_repo_frame(files_frame, pathManager, pathsetter)
 
-  #pathlbl.grid :column => 0, :row => 0
-  #pathname.grid :column => 1, :row => 0
-  #cancel.grid :column => 2, :row => 0
-  #choose.grid :column => 3, :row => 0
+end
 
-  # Make the window scalable. This allows the content-frame to scale.
-  #TkGrid.columnconfigure( browser_window, 0, :weight => 1, :minsize => 200 )
-  #TkGrid.rowconfigure( browser_window, 0, :weight => 1, :minsize => 200 )
+# Fill the frame with the contents of the pwdnode in the pathPosition
+# Returns a hash from index -> name for the contents
+# Also takes a function that's a closure to set the path in the window
+def populate_repo_frame(frame, pathPos, setpathfunc, dironly=true)
+  #puts "Available frame instance methods:"
+  #frame.class.instance_methods.each { |i| puts "#{i}:\t#{frame.method(i).arity}" }
 
-  #TkGrid.columnconfigure(content, 0, :weight => 1, :minsize => 200)
-  #TkGrid.rowconfigure(content, 0, :weight => 1, :minsize => 200)
+  #puts "Current Frame children:"
+  #frame.winfo_children.each { |c| puts c }
+
+  # Remove all children from the frame (clear the frame)
+  frame.winfo_children.each { |c| c.destroy }
+
+  pwdhash = pathPos.get_pwd_hash(dironly)
+  pwdhash.each do |idx, e|
+    fileLabel = Tk::Tile::Label.new(frame) { text "#{idx}: #{e}"; pack :side => 'top', :fill => 'x', :expand => 'yes' }
+    # Set the on-click listener
+    fileLabel.bind("Double-1") { puts "The item #{idx}: #{e} was double-clicked!";}
+    fileLabel.bind("1") { setpathfunc.call(e) }
+  end
+
+  return pwdhash
 end
 
 def get_login(parent, server)
@@ -164,8 +180,8 @@ def get_login(parent, server)
   return PentahoConnection.new $unvar.to_s, $pwvar.to_s, server
 end
 
-puts "Tk.instance_methods: #{Tk.instance_methods}"
-puts "Tk.constants: #{Tk.constants}"
+#puts "Tk.instance_methods: #{Tk.instance_methods}"
+#puts "Tk.constants: #{Tk.constants}"
 
 create_main_window()
 
