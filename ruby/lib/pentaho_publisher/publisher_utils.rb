@@ -83,6 +83,10 @@ class PentahoConnection
       @pwdnode = @rootnode
     end
 
+    def get_pwd_path()
+      return @pwdnode["path"]
+    end
+
     # Return the path of the specified target directory. The PWD will NOT be
     # changed in this step.
     def use(targetdir)
@@ -538,6 +542,13 @@ def ask_edits(file_hash)
   end
 
   return file_hash
+end
+
+def sanitize_path(path)
+  if !path.nil?
+    return path.sub /\/\/+/, '/'
+  end
+  return ''
 end
 
 def handle_publish(commands)

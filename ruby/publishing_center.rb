@@ -74,7 +74,6 @@ def getServerlist(serverText)
   slist = serverText.to_s.split
   if slist.empty?
     #msg = Tk.messageBox({ :message => 'Please entry at least one server first.', :title => 'Server Required', :type => "ok", :icon => "error" })
-    return ["http://sapapentah001.recondo.vci:8080/pentaho"]
   end
   return slist
 end
@@ -96,6 +95,7 @@ def create_server_browser(parent, server)
   end
 
   browser_window = TkToplevel.new(parent)
+  browser_window.raise
   browser_window['geometry'] = '400x400+100+100'
   #browser_window.minsize(:height => 200, :width => 200)
 
@@ -107,15 +107,19 @@ def create_server_browser(parent, server)
 
   control_frame = Tk::Tile::Frame.new(content) { padding "3 3 12 12"; pack :side => 'top', :fill => 'x'}
   pathlbl = Tk::Tile::Label.new(control_frame) { text "Path:"; pack :side => 'left'}
-  $pathname = TkVariable.new
-  pathname = Tk::Tile::Entry.new(control_frame) { text "/"; pack :side => 'left'; textvariable $pathname }
+
+  # starting path is '/'
+  $pathname = TkVariable.new '/'
+  pathname = Tk::Tile::Entry.new(control_frame) { textvariable $pathname; pack :side => 'left'; }
   cancel = Tk::Tile::Button.new(control_frame) {text "Cancel"; pack :side => 'left'}
+  cancel.bind("1") { browser_window.destroy }
   choose = Tk::Tile::Button.new(control_frame) {text "Choose"; pack :side => 'left'}
 
   pathManager = PentahoConnection::PathPosition.new(pconn.get_repo_hash)
 
   pathsetter = lambda do |path|
-    $pathname = path
+    puts "Changing the path from #{$pathname.to_s} to #{path}"
+    $pathname.value= sanitize_path path
   end
 
   populate_repo_frame(files_frame, pathManager, pathsetter)
@@ -140,7 +144,7 @@ def populate_repo_frame(frame, pathPos, setpathfunc, dironly=true)
     fileLabel = Tk::Tile::Label.new(frame) { text "#{idx}: #{e}"; pack :side => 'top', :fill => 'x', :expand => 'yes' }
     # Set the on-click listener
     fileLabel.bind("Double-1") { puts "The item #{idx}: #{e} was double-clicked!";}
-    fileLabel.bind("1") { setpathfunc.call(e) }
+    fileLabel.bind("1") { setpathfunc.call(pathPos.get_pwd_path() + '/' + e); puts "Path clicked was #{pathPos.get_pwd_path() + '/' + e}" }
   end
 
   return pwdhash
@@ -157,6 +161,7 @@ def get_login(parent, server)
   $unvar = TkVariable.new
   namelbl = Tk::Tile::Label.new(content) { text "Username:"; pack :anchor => 'nw' }
   nameentry = Tk::Tile::Entry.new(content) { textvariable $unvar; pack :anchor => 'n' }
+  nameentry.focus
 
   $pwvar = TkVariable.new
   pwlbl = Tk::Tile::Label.new(content) { text "Password"; pack :anchor => 'sw' }
