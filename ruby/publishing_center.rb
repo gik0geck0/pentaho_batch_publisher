@@ -122,14 +122,19 @@ def create_server_browser(parent, server)
     $pathname.value= sanitize_path path
   end
 
-  populate_repo_frame(files_frame, pathManager, pathsetter)
+  refreshfunc = lambda do
+    populate_repo_frame(files_frame, pathManager, pathsetter, refreshfunc)
+  end
+  # If the user presses enter after editing the path, refresh the window
+  #pathname.bind("Return") { puts "Pathname hit enter!"; refreshfunc.call }
 
+  refreshfunc.call
 end
 
 # Fill the frame with the contents of the pwdnode in the pathPosition
 # Returns a hash from index -> name for the contents
 # Also takes a function that's a closure to set the path in the window
-def populate_repo_frame(frame, pathPos, setpathfunc, dironly=true)
+def populate_repo_frame(frame, pathPos, setpathfunc, refreshfunc, dironly=true)
   #puts "Available frame instance methods:"
   #frame.class.instance_methods.each { |i| puts "#{i}:\t#{frame.method(i).arity}" }
 
@@ -140,11 +145,14 @@ def populate_repo_frame(frame, pathPos, setpathfunc, dironly=true)
   frame.winfo_children.each { |c| c.destroy }
 
   pwdhash = pathPos.get_pwd_hash(dironly)
+  pwdhash[0] = '..'
   pwdhash.each do |idx, e|
     fileLabel = Tk::Tile::Label.new(frame) { text "#{idx}: #{e}"; pack :side => 'top', :fill => 'x', :expand => 'yes' }
     # Set the on-click listener
-    fileLabel.bind("Double-1") { puts "The item #{idx}: #{e} was double-clicked!";}
-    fileLabel.bind("1") { setpathfunc.call(pathPos.get_pwd_path() + '/' + e); puts "Path clicked was #{pathPos.get_pwd_path() + '/' + e}" }
+    fileLabel.bind("Double-1") { puts "The item #{idx}: #{e} was double-clicked!"; pathPos.cd e; setpathfunc.call(pathPos.get_pwd_path()); refreshfunc.call() }
+    if idx != 0
+      fileLabel.bind("1") { setpathfunc.call(pathPos.get_pwd_path() + '/' + e); puts "Path clicked was #{pathPos.get_pwd_path() + '/' + e}" }
+    end
   end
 
   return pwdhash
@@ -172,6 +180,7 @@ def get_login(parent, server)
 
   login.bind("1") { browser_window.destroy }
   cancel.bind("1") { $unvar = ''; $pwvar = ''; browser_window.destroy }
+  browser_window.bind("Return") { browser_window.destroy } # Do the SAME thing as login-button press
 
   # Let's pause here, so the user can put in their login info, and after, we can return it
   browser_window.wait_window
