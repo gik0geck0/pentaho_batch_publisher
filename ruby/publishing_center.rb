@@ -23,9 +23,12 @@ def create_main_window()
   clearFiles = Tk::Tile::Button.new(content) {text "Clear Files"}
   serverlbl = Tk::Tile::Label.new(content) {text "Destination Server"}
   pathlbl = Tk::Tile::Label.new(content) {text "Destination Path"}
+
   $servertext = TkVariable.new
   destServer = Tk::Tile::Entry.new(content) { textvariable $servertext; }
-  destPath = Tk::Tile::Entry.new(content)
+  $pathtext = TkVariable.new
+  destPath = Tk::Tile::Entry.new(content) { textvariable $pathtext; }
+
   browse = Tk::Tile::Button.new(content) {text "Browse"}
   cancel = Tk::Tile::Button.new(content) {text "Cancel"}
   publish = Tk::Tile::Button.new(content) {text "Publish"}
@@ -57,7 +60,10 @@ def create_main_window()
   browse.bind("1") do
     serverList = getServerlist($servertext);
     if not serverList.nil?
-      create_server_browser(root, serverList[0])
+      # Open up a browser to get a path
+      pname = create_server_browser(root, serverList[0])
+      # Save it to the pathtext variable when it returns
+      $pathtext.value= pname
     end
   end
   cancel.bind("1") { exit(0) }
@@ -129,6 +135,10 @@ def create_server_browser(parent, server)
   #pathname.bind("Return") { puts "Pathname hit enter!"; refreshfunc.call }
 
   refreshfunc.call
+
+  # Wait for the path to be chosen, then return it
+  browser_window.wait_window
+  return $pathname.to_s
 end
 
 # Fill the frame with the contents of the pwdnode in the pathPosition
