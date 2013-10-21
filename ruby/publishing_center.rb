@@ -69,10 +69,23 @@ def create_main_window()
   cancel.bind("1") { exit(0) }
   addFile.bind("1") do
     fname = Tk::getOpenFile(:multiple => true, :parent => content)
-    puts "Adding these files: #{fname}"
+    files = multi_file_split fname
   end
 
   Tk.mainloop
+end
+
+# files is a string that has a space-separated list of files. Caveat: literal spaces will appear like '\ '
+def multi_file_split(files)
+  flist = []
+  puts "Splitting the string: #{files}"
+  flist = files.split(/\} \{/)
+
+  # The first string will start with '{', and the last string will end with '}'
+  flist[0] = flist[0][1..-1]
+  flist[-1] = flist[-1][0..-2]
+  puts "Initial split: #{flist}"
+  return flist
 end
 
 # Converts the input on the server-text into a list of servers. Will create an error-box if there are any problems, and if there's a critical error, nil will be returned
