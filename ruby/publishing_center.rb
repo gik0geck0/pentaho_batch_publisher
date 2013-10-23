@@ -49,7 +49,7 @@ def create_main_window()
   pathlbl = Tk::Tile::Label.new(content) {text "Destination Path"}
 
   $servertext = TkVariable.new
-  destServer = Tk::Tile::Entry.new(content) { textvariable $servertext; }
+  destServer = Tk::Tile::Entry.new(content) { textvariable $servertext; pack :expand => 1, :fill => 'x';}
   $pathtext = TkVariable.new
   destPath = Tk::Tile::Entry.new(content) { textvariable $pathtext; }
 
@@ -64,10 +64,10 @@ def create_main_window()
   addFile.grid :column => 2, :row => 0, :sticky => 'new', :pady => 5, :padx => 5
   clearFiles.grid :column => 3, :row => 0, :sticky => 'new', :pady => 5, :padx => 5
   serverlbl.grid :column => 0, :row => 3
-  destServer.grid :column => 1, :row => 3
+  destServer.grid :column => 1, :row => 3, :sticky => "nsew"
 
   pathlbl.grid :column => 0, :row => 4
-  destPath.grid :column => 1, :row => 4
+  destPath.grid :column => 1, :row => 4, :sticky => "nsew"
   browse.grid :column => 2, :row => 4
 
   cancel.grid :column => 2, :row => 5
