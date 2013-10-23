@@ -41,6 +41,7 @@ def create_main_window()
     columnconfigure 5, :width => 5
     autoscroll
   }
+  $nrows = 0
   #files_table.expand '1'
 
   addFile = Tk::Tile::Button.new(content) {text "Add Files"}
@@ -74,11 +75,12 @@ def create_main_window()
   publish.grid :column => 3, :row => 5
 
   # Make the root scalable. This allows the content-frame to scale.
-  TkGrid.columnconfigure( root, 0, :weight => 1 , :minsize => 400)
-  TkGrid.rowconfigure( root, 0, :weight => 1, :minsize => 400)
+  TkGrid.columnconfigure( root, 0, :weight => 1)
+  TkGrid.rowconfigure( root, 0, :weight => 1)
   # Make a scaling unit in the center. This makes everything finite-size EXCEPT the things in col1 or row1, which are expandable.
-  TkGrid.columnconfigure( content, 1, :weight => 1, :minsize => 400 )
-  TkGrid.rowconfigure( content, 1, :weight => 1, :minsize => 400)
+  # configure can take :minsize => 400
+  TkGrid.columnconfigure( content, 1, :weight => 1)
+  TkGrid.rowconfigure( content, 1, :weight => 1)
 
   # Event Binding
   browse.bind("1") do
@@ -90,6 +92,7 @@ def create_main_window()
       $pathtext.value= pname
     end
   end
+  clearFiles.bind("1") { files_table.delete 0, $nrows; $nrows = 0 }
   cancel.bind("1") { exit(0) }
   addFile.bind("1") do
     fname = Tk::getOpenFile(:multiple => true, :parent => content)
@@ -98,15 +101,17 @@ def create_main_window()
     else
       addfiles = fname.split
     end
+    #$nrows += addfiles.size()
     $fileslist.concat addfiles
-    addfiles_totable(addfiles, files_table)
+    $nrows = addfiles_totable(addfiles, files_table, $nrows)
   end
 
   Tk.mainloop
 end
 
 # ftable is expected to be Tablelist (from tkextlib/tcllib/tablelist)
-def addfiles_totable(flist, ftable)
+def addfiles_totable(flist, ftable, nrows)
+  startrows = nrows
 
   # Map from path to destination
   fdest = {}
@@ -114,13 +119,13 @@ def addfiles_totable(flist, ftable)
   puts "Iterating through the files"
   flist.each_index do |idx|
     e = flist[idx]
-    puts "Looking at index=#{idx}, and path=#{e}"
+    puts "Looking at index=#{idx+nrows}, and path=#{e}"
 
     fdest[e] = File.basename(e)
     puts "Set dest to #{fdest[e]}"
 
     thisrow = []
-    thisrow << idx.to_s
+    thisrow << (idx+startrows).to_s
     thisrow << e
     thisrow << fdest[e]
 
@@ -147,10 +152,12 @@ def addfiles_totable(flist, ftable)
       col.gsub!(' ', '\\ ')
     end
 
-    ftable.insert 0, thisrow
+    ftable.insert nrows, thisrow
+    nrows+=1
   end
 
   ftable.bind("1") { |event| gi = event.widget.grid_info(); puts "Clicked on row: #{gi['row']}, column: #{gi['column']}"; }
+  return nrows
 end
 
 def maxsize(str, size)
@@ -202,7 +209,6 @@ def create_server_browser(parent, server)
   browser_window = TkToplevel.new(parent)
   browser_window.raise
   browser_window['geometry'] = '400x400+100+100'
-  #browser_window.minsize(:height => 200, :width => 200)
 
   content = Tk::Tile::Frame.new(browser_window) { padding "3 3 12 12"; pack :side => 'top', 'fill' => "both", 'expand' => 'yes'; }
   #testlbl = Tk::Tile::Label.new(browser_window) { text "HEY LOOK AT ME, IM TAKING UP SPACE" }
@@ -270,7 +276,6 @@ end
 def get_login(parent, server)
   browser_window = TkToplevel.new(parent)
   #browser_window['geometry'] = '400x400+100+100'
-  #browser_window.minsize(:height => 200, :width => 200)
 
   content = Tk::Tile::Frame.new(browser_window) { padding "3 3 12 12"; pack :side => 'top', 'fill' => "both", 'expand' => 'yes'; }
   #testlbl = Tk::Tile::Label.new(browser_window) { text "HEY LOOK AT ME, IM TAKING UP SPACE" }
