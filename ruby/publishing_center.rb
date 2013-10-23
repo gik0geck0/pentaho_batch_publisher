@@ -2,8 +2,14 @@
 
 #require_relative 'publish.rb'
 require 'pentaho_publisher/publisher_utils'
-#require 'pentaho_publisher/prpt_utils'
+require 'pentaho_publisher/prpt_utils'
 require 'tk'
+# Included package from http://www.nemethi.de/
+# In ArchLinux, it's a community package for Tcl8.6 (symlinked for use in 8.5)
+# On windows, it'll be necesary to copy the contents of the zip into a specific
+# tcl-lib folder somewhere. I don't know where though.
+require 'tkextlib/tcllib/tablelist'
+
 
 # This is a GUI client for the pentaho batch publisher
 
@@ -16,8 +22,16 @@ def create_main_window()
   content = Tk::Tile::Frame.new(root) {padding "3 3 12 12"}
   content.grid :column => 0, :row => 0, :sticky => 'nsew'
 
+  $fileslist = []
   namelbl = Tk::Tile::Label.new(content) {text "Choose Files"}
-  files_frame = Tk::Tile::Frame.new(content) { borderwidth 5; relief "sunken";}
+  files_table = Tk::Tcllib::Tablelist.new(content) { 
+    columns columnzip(["Index", "Path", "Destination", "Title", "Output Type", "Lock?"])
+    #columns "0 'A' 1 'B' 2 'C' 3 'D' 4 'E' 5 'F' 6 'G'";
+    stretch 'all'
+    background 'white'
+    foreground 'black'
+  }
+  #files_table.expand '1'
 
   addFile = Tk::Tile::Button.new(content) {text "Add Files"}
   clearFiles = Tk::Tile::Button.new(content) {text "Clear Files"}
@@ -35,7 +49,7 @@ def create_main_window()
 
   # Place the widgets in a grid-layout
   namelbl.grid :column => 0, :row => 0, :columnspan => 4, :sticky => 'nw', :padx => 5
-  files_frame.grid :column => 0, :row => 1, :columnspan => 4, :sticky => 'nsew'
+  files_table.grid :column => 0, :row => 1, :columnspan => 4, :sticky => 'nsew'
 
   addFile.grid :column => 2, :row => 0, :sticky => 'new', :pady => 5, :padx => 5
   clearFiles.grid :column => 3, :row => 0, :sticky => 'new', :pady => 5, :padx => 5
@@ -69,10 +83,66 @@ def create_main_window()
   cancel.bind("1") { exit(0) }
   addFile.bind("1") do
     fname = Tk::getOpenFile(:multiple => true, :parent => content)
-    files = multi_file_split fname
+    if fname.include? "{"
+      $fileslist = $fileslist.concat multi_file_split fname
+    else
+      $fileslist = $fileslist.concat fname.split
+    end
+    refresh_files_frame($fileslist, files_table)
   end
 
   Tk.mainloop
+end
+
+# ftable is expected to be Tablelist (from tkextlib/tcllib/tablelist)
+def refresh_files_frame(flist, ftable)
+
+  # Map from path to destination
+  fdest = {}
+
+  puts "Iterating through the files"
+  flist.each_index do |idx|
+    e = flist[idx]
+    puts "Looking at index=#{idx}, and path=#{e}"
+
+    fdest[e] = File.basename(e)
+    puts "Set dest to #{fdest[e]}"
+
+    thisrow = []
+    thisrow << idx.to_s
+    thisrow << e
+    thisrow << fdest[e]
+
+    # Use prpt-get functions if it's a prpt
+    if e.end_with? ".prpt"
+      title = get_title(e)
+      outputtype = get_output_type(e)
+      outputlock = get_output_lock(e)
+    else
+      title = "None"
+      outputtype = "None"
+      outputlock = "None"
+    end
+    puts "Set title to #{title}"
+    puts "Set type to #{outputtype}"
+    puts "Set lock to #{outputlock}"
+
+    thisrow << title
+    thisrow << outputtype
+    thisrow << outputlock
+
+    ftable.insert thisrow
+  end
+
+  ftable.bind("1") { |event| gi = event.widget.grid_info(); puts "Clicked on row: #{gi['row']}, column: #{gi['column']}"; }
+end
+
+def maxsize(str, size)
+  if str.length > size - 3
+    "...".concat str[-size..-1]
+  else
+    str
+  end
 end
 
 # files is a string that has a space-separated list of files. Caveat: literal spaces will appear like '\ '
@@ -215,6 +285,16 @@ def get_login(parent, server)
 
   # Create a new connection to the first server in the list
   return PentahoConnection.new $unvar.to_s, $pwvar.to_s, server
+end
+
+# Takes a list of columns, and produces an expected column format for tcl/Tablelist
+# Ex. columnzip(["A", "B", "C"]) -> "0 'A' 1 'B' 2 'C'"
+def columnzip(colnames)
+  runningstr = ""
+  colnames.each_index do |idx|
+    runningstr += " #{idx} '#{colnames[idx]}'"
+  end
+  return runningstr
 end
 
 #puts "Tk.instance_methods: #{Tk.instance_methods}"
