@@ -21,15 +21,25 @@ def create_main_window()
   # Content is a single frame inside the root.
   content = Tk::Tile::Frame.new(root) {padding "3 3 12 12"}
   content.grid :column => 0, :row => 0, :sticky => 'nsew'
+  content.raise
 
   $fileslist = []
   namelbl = Tk::Tile::Label.new(content) {text "Choose Files"}
   files_table = Tk::Tcllib::Tablelist.new(content) { 
-    columns columnzip(["Index", "Path", "Destination", "Title", "Output Type", "Lock?"])
+    cols = columnzip(["Index", "Path", "Destination", "Title", "Output Type", "Lock"])
+    #puts "Columns: #{cols}"
+    columns cols.to_s
     #columns "0 'A' 1 'B' 2 'C' 3 'D' 4 'E' 5 'F' 6 'G'";
     stretch 'all'
     background 'white'
     foreground 'black'
+    columnconfigure 0, :width => 5
+    columnconfigure 1, :width => 20
+    columnconfigure 2, :width => 20
+    columnconfigure 3, :width => 10
+    columnconfigure 4, :width => 5
+    columnconfigure 5, :width => 5
+    autoscroll
   }
   #files_table.expand '1'
 
@@ -84,18 +94,19 @@ def create_main_window()
   addFile.bind("1") do
     fname = Tk::getOpenFile(:multiple => true, :parent => content)
     if fname.include? "{"
-      $fileslist = $fileslist.concat multi_file_split fname
+      addfiles = multi_file_split fname
     else
-      $fileslist = $fileslist.concat fname.split
+      addfiles = fname.split
     end
-    refresh_files_frame($fileslist, files_table)
+    $fileslist.concat addfiles
+    addfiles_totable(addfiles, files_table)
   end
 
   Tk.mainloop
 end
 
 # ftable is expected to be Tablelist (from tkextlib/tcllib/tablelist)
-def refresh_files_frame(flist, ftable)
+def addfiles_totable(flist, ftable)
 
   # Map from path to destination
   fdest = {}
@@ -131,7 +142,12 @@ def refresh_files_frame(flist, ftable)
     thisrow << outputtype
     thisrow << outputlock
 
-    ftable.insert thisrow
+    # Escape spaces
+    thisrow.each do |col|
+      col.gsub!(' ', '\\ ')
+    end
+
+    ftable.insert 0, thisrow
   end
 
   ftable.bind("1") { |event| gi = event.widget.grid_info(); puts "Clicked on row: #{gi['row']}, column: #{gi['column']}"; }
@@ -292,7 +308,7 @@ end
 def columnzip(colnames)
   runningstr = ""
   colnames.each_index do |idx|
-    runningstr += " #{idx} '#{colnames[idx]}'"
+    runningstr += " #{idx} #{colnames[idx].gsub(' ', '\\ ')}"
   end
   return runningstr
 end
