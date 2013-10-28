@@ -17,6 +17,7 @@ def create_main_window()
 
   # Root is the main window. If this is closed/destroyed, ALL children will also close.
   root = TkRoot.new
+  root.raise
 
   # Content is a single frame inside the root.
   content = Tk::Tile::Frame.new(root) {padding "3 3 12 12"}
@@ -24,8 +25,9 @@ def create_main_window()
   content.raise
 
   $fileslist = []
+  fdestmap = {}
   namelbl = Tk::Tile::Label.new(content) {text "Choose Files"}
-  files_table = Tk::Tcllib::Tablelist.new(content) { 
+  files_table = Tk::Tcllib::Tablelist.new(content) {
     cols = columnzip(["Index", "Path", "Destination", "Title", "Output Type", "Lock"])
     #puts "Columns: #{cols}"
     columns cols.to_s
@@ -33,16 +35,26 @@ def create_main_window()
     stretch 'all'
     background 'white'
     foreground 'black'
-    columnconfigure 0, :width => 5
-    columnconfigure 1, :width => 20
-    columnconfigure 2, :width => 20
-    columnconfigure 3, :width => 10
-    columnconfigure 4, :width => 5
-    columnconfigure 5, :width => 5
+    columnconfigure 0, :editable => 'no', :width => 5
+    columnconfigure 1, :editable => 'no', :width => 20
+    columnconfigure 2, :editable => 'yes', :width => 20
+    columnconfigure 3, :editable => 'yes', :width => 10
+    columnconfigure 4, :editable => 'yes', :width => 5
+    columnconfigure 5, :editable => 'yes', :width => 5
     autoscroll
   }
   $nrows = 0
   #files_table.expand '1'
+  #files_table.methods.sort.each { |i| puts i }
+  files_table.bodytag.bind("1") do |event|
+    puts "Body tag clicked on. Got a #{event.class}"
+    puts "Methods available:"
+    #files_table.bodytag.methods.sort.each { |i| puts i }
+    #puts "Body X,Y: (#{files_table.bodytag.x}, #{files_table.bodytag.y}"
+    elist = Tk::Tcllib::Tablelist.convEventFields event.window, event.x, event.y
+    puts "X,Y: (#{event.x},#{event.y})"
+    puts "Row: #{files_table.containing event.y}", "Column: #{files_table.containingcolumn event.x}"
+  end
 
   addFile = Tk::Tile::Button.new(content) {text "Add Files"}
   clearFiles = Tk::Tile::Button.new(content) {text "Clear Files"}
@@ -61,6 +73,7 @@ def create_main_window()
   # Place the widgets in a grid-layout
   namelbl.grid :column => 0, :row => 0, :columnspan => 4, :sticky => 'nw', :padx => 5
   files_table.grid :column => 0, :row => 1, :columnspan => 4, :sticky => 'nsew'
+  #files_table.methods.sort.each { |i| puts i }
 
   addFile.grid :column => 2, :row => 0, :sticky => 'new', :pady => 5, :padx => 5
   clearFiles.grid :column => 3, :row => 0, :sticky => 'new', :pady => 5, :padx => 5
@@ -89,10 +102,18 @@ def create_main_window()
       # Open up a browser to get a path
       pname = create_server_browser(root, serverList[0])
       # Save it to the pathtext variable when it returns
-      $pathtext.value= pname
+      if not pname.nil?
+        $pathtext.value= pname
+      end
     end
   end
-  clearFiles.bind("1") { files_table.delete 0, $nrows; $nrows = 0 }
+
+  # Function for changing a file's destination
+  changedest = lambda do |path, dest|
+    fdestmap[path] = dest
+  end
+
+  clearFiles.bind("1") { files_table.delete 0, $nrows; $nrows = 0; fdestmap.each { |k| fdestmap.delete k }; }
   cancel.bind("1") { exit(0) }
   addFile.bind("1") do
     fname = Tk::getOpenFile(:multiple => true, :parent => content)
@@ -101,33 +122,59 @@ def create_main_window()
     else
       addfiles = fname.split
     end
+    # initialize the destinations in the map
+    addfiles.each { |f| fdestmap[f] = File.basename(f) }
     #$nrows += addfiles.size()
     $fileslist.concat addfiles
-    $nrows = addfiles_totable(addfiles, files_table, $nrows)
+    $nrows = addfiles_totable(addfiles, files_table, $nrows, fdestmap, changedest)
+  end
+  publish.bind("1") do
+    if ($servertext == '')
+      msg = Tk.messageBox({ :message => 'Please choose at least one server to publish to', :title => 'Server Required', :type => "ok", :icon => "warning" })
+      return
+    end
+    if (fdestmap.empty?)
+      msg = Tk.messageBox({ :message => 'Please choose at least one file', :title => 'File(s) Required', :type => "ok", :icon => "warning" })
+      return
+    end
+    if ($pathtext == '')
+      msg = Tk.messageBox({ :message => 'Please choose a path first', :title => 'Path Required', :type => "ok", :icon => "warning" })
+      return
+    end
+
+    binary_hash = {}
+    fdestmap.each do |localfname, remotefname|
+      openfile = File.new localfname, 'rb'
+      binary_hash[URI.encode(remotefname)] = openfile
+    end
+    serverlist = getServerlist($servertext)
+    serverlist.each do |server|
+      pubpass = get_pubpass(root, server)
+      # Chomp the end. There's likely newlines
+      #publish_response = pconn.publish_report(binary_hash.clone, path, pubpass).chomp
+    end
+    puts 'Finished the publish command'
   end
 
   Tk.mainloop
 end
 
 # ftable is expected to be Tablelist (from tkextlib/tcllib/tablelist)
-def addfiles_totable(flist, ftable, nrows)
+def addfiles_totable(flist, ftable, nrows, fdestmap, changedestfunc)
   startrows = nrows
 
   # Map from path to destination
-  fdest = {}
 
   puts "Iterating through the files"
   flist.each_index do |idx|
     e = flist[idx]
-    puts "Looking at index=#{idx+nrows}, and path=#{e}"
 
-    fdest[e] = File.basename(e)
-    puts "Set dest to #{fdest[e]}"
+    fdestmap[e] = File.basename(e)
 
     thisrow = []
     thisrow << (idx+startrows).to_s
     thisrow << e
-    thisrow << fdest[e]
+    thisrow << fdestmap[e]
 
     # Use prpt-get functions if it's a prpt
     if e.end_with? ".prpt"
@@ -139,9 +186,6 @@ def addfiles_totable(flist, ftable, nrows)
       outputtype = "None"
       outputlock = "None"
     end
-    puts "Set title to #{title}"
-    puts "Set type to #{outputtype}"
-    puts "Set lock to #{outputlock}"
 
     thisrow << title
     thisrow << outputtype
@@ -156,7 +200,6 @@ def addfiles_totable(flist, ftable, nrows)
     nrows+=1
   end
 
-  ftable.bind("1") { |event| gi = event.widget.grid_info(); puts "Clicked on row: #{gi['row']}, column: #{gi['column']}"; }
   return nrows
 end
 
@@ -185,7 +228,7 @@ end
 def getServerlist(serverText)
   slist = serverText.to_s.split
   if slist.empty?
-    #msg = Tk.messageBox({ :message => 'Please entry at least one server first.', :title => 'Server Required', :type => "ok", :icon => "error" })
+    msg = Tk.messageBox({ :message => 'Please entry at least one server first.', :title => 'Server Required', :type => "ok", :icon => "error" })
   end
   return slist
 end
@@ -223,8 +266,9 @@ def create_server_browser(parent, server)
   $pathname = TkVariable.new '/'
   pathname = Tk::Tile::Entry.new(control_frame) { textvariable $pathname; pack :side => 'left'; }
   cancel = Tk::Tile::Button.new(control_frame) {text "Cancel"; pack :side => 'left'}
-  cancel.bind("1") { browser_window.destroy }
+  cancel.bind("1") { $pathname = nil; browser_window.destroy }
   choose = Tk::Tile::Button.new(control_frame) {text "Choose"; pack :side => 'left'}
+  choose.bind("1") { browser_window.destroy }
 
   pathManager = PentahoConnection::PathPosition.new(pconn.get_repo_hash)
 
@@ -276,6 +320,7 @@ end
 def get_login(parent, server)
   browser_window = TkToplevel.new(parent)
   #browser_window['geometry'] = '400x400+100+100'
+  browser_window.raise
 
   content = Tk::Tile::Frame.new(browser_window) { padding "3 3 12 12"; pack :side => 'top', 'fill' => "both", 'expand' => 'yes'; }
   #testlbl = Tk::Tile::Label.new(browser_window) { text "HEY LOOK AT ME, IM TAKING UP SPACE" }
@@ -308,6 +353,36 @@ def get_login(parent, server)
   return PentahoConnection.new $unvar.to_s, $pwvar.to_s, server
 end
 
+def get_pubpass(parent, server)
+  browser_window = TkToplevel.new(parent) { title "Publishing password for " + server }
+  #browser_window['geometry'] = '400x400+100+100'
+  browser_window.raise
+
+  content = Tk::Tile::Frame.new(browser_window) { padding "3 3 12 12"; pack :side => 'top', 'fill' => "both", 'expand' => 'yes'; }
+  #testlbl = Tk::Tile::Label.new(browser_window) { text "HEY LOOK AT ME, IM TAKING UP SPACE" }
+
+  $pwvar = TkVariable.new
+  pwlbl = Tk::Tile::Label.new(content) { text "Publishing Password"; pack :anchor => 'sw' }
+  pwentry = Tk::Tile::Entry.new(content) { show '*'; textvariable $pwvar; pack :anchor => 's' }
+
+  login = Tk::Tile::Button.new(content) { text "OK"; pack :anchor => 'se' }
+  cancel = Tk::Tile::Button.new(content) { text "Cancel"; pack :anchor => 'se' }
+
+  login.bind("1") { browser_window.destroy }
+  cancel.bind("1") { $pwvar = nil; browser_window.destroy }
+  browser_window.bind("Return") { browser_window.destroy } # Do the SAME thing as login-button press
+
+  # Let's pause here, so the user can put in their login info, and after, we can return it
+  browser_window.wait_window
+
+  # Create a new connection to the first server in the list
+  if $pwvar.nil?
+    return nil
+  else
+    return $pwvar.to_s
+  end
+end
+
 # Takes a list of columns, and produces an expected column format for tcl/Tablelist
 # Ex. columnzip(["A", "B", "C"]) -> "0 'A' 1 'B' 2 'C'"
 def columnzip(colnames)
@@ -318,18 +393,4 @@ def columnzip(colnames)
   return runningstr
 end
 
-#puts "Tk.instance_methods: #{Tk.instance_methods}"
-#puts "Tk.constants: #{Tk.constants}"
-
 create_main_window()
-
-=begin Variable example
-
-$option_one = TkVariable.new( 1 )
-one = Tk::Tile::CheckButton.new(content) {text "One"; variable $option_one; onvalue 1}
-$option_two = TkVariable.new( 0 )
-two = Tk::Tile::CheckButton.new(content) {text "Two"; variable $option_two; onvalue 1}
-$option_three = TkVariable.new( 1 )
-three = Tk::Tile::CheckButton.new(content) {text "Three"; variable $option_three; onvalue 1}
-
-=end
