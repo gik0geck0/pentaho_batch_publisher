@@ -149,9 +149,11 @@ def create_main_window()
     end
     serverlist = getServerlist($servertext)
     serverlist.each do |server|
+      pconn = get_login(root, server)
       pubpass = get_pubpass(root, server)
       # Chomp the end. There's likely newlines
-      #publish_response = pconn.publish_report(binary_hash.clone, path, pubpass).chomp
+      publish_response = pconn.publish_report(binary_hash.clone, $pathtext.to_s, pubpass).chomp
+      puts "Publish to #{server} returned #{publish_response}"
     end
     puts 'Finished the publish command'
   end
