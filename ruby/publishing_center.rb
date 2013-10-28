@@ -148,14 +148,41 @@ def create_main_window()
       binary_hash[URI.encode(remotefname)] = openfile
     end
     serverlist = getServerlist($servertext)
+
+    statuswindow = TkToplevel.new(root) { title "Publishing Status"; background "grey" }
+    statuswindow['geometry'] = '200x400+100+100'
+    statuswindow.raise
+
+    idx = 0
+    texts = []
+    serverlist.each do |server|
+      serverl = Tk::Tile::Label.new(statuswindow) { text "#{server}: "; padding "3 3 12 12" }
+      serverl.grid :column => 0, :row => idx, :sticky => 'new'
+      texts << TkVariable.new("?")
+      status = Tk::Tile::Label.new(statuswindow) { textvariable texts[-1] }
+      status.grid :column => 1, :row => idx, :sticky => 'new'
+      idx+=1
+    end
+
+    i = 0
     serverlist.each do |server|
       pconn = get_login(root, server)
       pubpass = get_pubpass(root, server)
+
       # Chomp the end. There's likely newlines
       publish_response = pconn.publish_report(binary_hash.clone, $pathtext.to_s, pubpass).chomp
       puts "Publish to #{server} returned #{publish_response}"
+      if publish_response == '3'
+        texts[i].value= 'Success!'
+      else
+        texts[i].value= 'Fail!'
+      end
+      i+=1
     end
-    puts 'Finished the publish command'
+    okbutton = Tk::Tile::Button.new(statuswindow) { text "OK" }
+    okbutton.grid :column => 1, :row => idx, :sticky => 'se'
+    okbutton.bind("1") { statuswindow.destroy }
+    statuswindow.wait_window
   end
 
   Tk.mainloop
@@ -340,7 +367,8 @@ def get_login(parent, server)
   cancel = Tk::Tile::Button.new(content) { text "Cancel"; pack :anchor => 'se' }
 
   login.bind("1") { browser_window.destroy }
-  cancel.bind("1") { $unvar = ''; $pwvar = ''; browser_window.destroy }
+  cancel.bind("1") do
+    $unvar = ''; $pwvar = ''; browser_window.destroy
   browser_window.bind("Return") { browser_window.destroy } # Do the SAME thing as login-button press
 
   # Let's pause here, so the user can put in their login info, and after, we can return it
