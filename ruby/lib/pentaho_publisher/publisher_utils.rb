@@ -544,6 +544,23 @@ def ask_edits(file_hash)
   return file_hash
 end
 
+def get_response_meaning(respcode)
+  case respcode
+	when	'1'
+		"Error: File exists. Did you mean to turn replacement on?"
+	when '2'
+		"Error: File Add Failed. (Though I don't have any information on why)"
+  when '3'
+		"Report Published Sucessfully!"
+  when '4'
+		"Error: Invalid Publishing Password."
+  when '5'
+		"Error: Invalid user credentials."
+	else
+		"Unknown Error"
+	end
+end
+
 def sanitize_path(path)
   if !path.nil?
     return path.sub /\/\/+/, '/'
