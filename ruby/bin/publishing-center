@@ -297,7 +297,15 @@ def create_server_browser(parent, server)
   choose = Tk::Tile::Button.new(control_frame) {text "Choose"; pack :side => 'left'}
   choose.bind("1") { browser_window.destroy }
 
-  pathManager = PentahoConnection::PathPosition.new(pconn.get_repo_hash)
+  repohash = pconn.get_repo_hash
+
+  if repohash.nil?
+    msg = Tk.messageBox({ :message => 'Error occured while trying to retrieve the contents of the repository.', :title => 'Could not retrieve Repository', :type => "ok", :icon => "error" })
+    browser_window.destroy
+    return nil
+  end
+
+  pathManager = PentahoConnection::PathPosition.new(repohash)
 
   pathsetter = lambda do |path|
     puts "Changing the path from #{$pathname.to_s} to #{path}"

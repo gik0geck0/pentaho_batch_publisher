@@ -25,6 +25,10 @@ class PentahoConnection
   def get_repo_hash
     begin
     hash = get '/SolutionRepositoryService?component=getSolutionRepositoryDoc'
+		if hash =~ /<html>/
+      # Pentaho returned HTML. Login or query param must have been invalid
+			return nil
+		end
     return hash
     rescue Errno::ECONNREFUSED
       puts 'Connection refused. Bad username/password combo?'
