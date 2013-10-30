@@ -369,6 +369,7 @@ def get_login(parent, server)
   login.bind("1") { browser_window.destroy }
   cancel.bind("1") do
     $unvar = ''; $pwvar = ''; browser_window.destroy
+  end
   browser_window.bind("Return") { browser_window.destroy } # Do the SAME thing as login-button press
 
   # Let's pause here, so the user can put in their login info, and after, we can return it
