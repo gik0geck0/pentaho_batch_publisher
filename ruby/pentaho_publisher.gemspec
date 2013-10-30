@@ -9,4 +9,5 @@ Gem::Specification.new do |s|
   s.license     = 'MIT'
   s.files       = ['lib/pentaho_publisher/publisher_utils.rb', 'lib/pentaho_publisher/prpt_utils.rb']
   s.executables << 'pentaho-publish'
+  s.executables << 'publishing-center'
 end
