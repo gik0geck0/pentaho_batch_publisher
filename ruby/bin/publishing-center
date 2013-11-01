@@ -26,6 +26,7 @@ def create_main_window()
 
   $fileslist = []
   fdestmap = {}
+  $listvar = TkVariable.new([], :list)
   namelbl = Tk::Tile::Label.new(content) {text "Choose Files"}
   files_table = Tk::Tcllib::Tablelist.new(content) {
     cols = columnzip(["Index", "Path", "Destination", "Title", "Output Type", "Lock"])
@@ -41,21 +42,13 @@ def create_main_window()
     columnconfigure 3, :editable => 'yes', :width => 10
     columnconfigure 4, :editable => 'yes', :width => 5
     columnconfigure 5, :editable => 'yes', :width => 5
+    listvariable $listvar
     autoscroll
   }
   $nrows = 0
-  #files_table.expand '1'
-  #files_table.methods.sort.each { |i| puts i }
-  files_table.bodytag.bind("1") do |event|
-    puts "Body tag clicked on. Got a #{event.class}"
-    puts "Methods available:"
-    #files_table.bodytag.methods.sort.each { |i| puts i }
-    #puts "Body X,Y: (#{files_table.bodytag.x}, #{files_table.bodytag.y}"
-    elist = Tk::Tcllib::Tablelist.convEventFields event.window, event.x, event.y
-    puts "X,Y: (#{event.x},#{event.y})"
-    puts "Row: #{files_table.containing event.y}", "Column: #{files_table.containingcolumn event.x}"
-  end
+  #files_table.bodytag
 
+  save = Tk::Tile::Button.new(content) {text "Save Changes"}
   addFile = Tk::Tile::Button.new(content) {text "Add Files"}
   clearFiles = Tk::Tile::Button.new(content) {text "Clear Files"}
   serverlbl = Tk::Tile::Label.new(content) {text "Destination Server"}
@@ -69,12 +62,12 @@ def create_main_window()
   browse = Tk::Tile::Button.new(content) {text "Browse"}
   cancel = Tk::Tile::Button.new(content) {text "Cancel"}
   publish = Tk::Tile::Button.new(content) {text "Publish"}
-
   # Place the widgets in a grid-layout
   namelbl.grid :column => 0, :row => 0, :columnspan => 4, :sticky => 'nw', :padx => 5
   files_table.grid :column => 0, :row => 1, :columnspan => 4, :sticky => 'nsew'
   #files_table.methods.sort.each { |i| puts i }
 
+  save.grid :column => 1, :row => 0, :sticky => 'new', :pady => 5, :padx => 5
   addFile.grid :column => 2, :row => 0, :sticky => 'new', :pady => 5, :padx => 5
   clearFiles.grid :column => 3, :row => 0, :sticky => 'new', :pady => 5, :padx => 5
   serverlbl.grid :column => 0, :row => 3
@@ -96,6 +89,22 @@ def create_main_window()
   TkGrid.rowconfigure( content, 1, :weight => 1)
 
   # Event Binding
+  save.bind("1") do |event|
+    idx=0
+    #puts $listvar.methods.sort
+    $listvar.list.each do |i|
+      # i contains a string that represents the row
+      # i can ALMOST be space-separated. It'll need a kinda-fancy parser
+      #   If a column contains spaces, it is surrounded by {}. Otherwise, it
+      #   does not contain spaces
+      puts i
+
+      # Compare each column (2..5) to the current value for the file (filename=index 1)
+      # If the value in the row is different, use to appropriate function call in prpt_utils
+      # to change the report. Note: Only apply those functions if the filename ends with a .prpt
+    end
+  end
+
   browse.bind("1") do
     serverList = getServerlist($servertext);
     if not serverList.nil?
